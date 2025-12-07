@@ -30,11 +30,20 @@ class ArcFaceTrainer:
     """
     Class chính để quản lý quá trình training
     """
-    def __init__(self, config_path):
+    def __init__(self, config_path, pretrained_path=None, data_dir=None, checkpoint_dir=None):
         self.config = self.load_config(config_path)
         self.device = torch.device(self.config['device'] if torch.cuda.is_available() else 'cpu')
+        self.pretrained_path = pretrained_path
         
         print(f"Sử dụng device: {self.device}")
+        
+        # Override config nếu có
+        if data_dir:
+            self.config['data']['train_csv'] = os.path.join(data_dir, 'processed', 'train_metadata.csv')
+            self.config['data']['val_csv'] = os.path.join(data_dir, 'processed', 'val_metadata.csv')
+        
+        if checkpoint_dir:
+            self.config['checkpoint']['save_dir'] = checkpoint_dir
         
         # Khởi tạo các thành phần
         self.setup_dirs()
@@ -101,9 +110,8 @@ class ArcFaceTrainer:
         )
         
         # Load pretrained backbone nếu có
-        if hasattr(self, 'pretrained_path') and self.pretrained_path:
-            if os.path.exists(self.pretrained_path):
-                load_pretrained_backbone(self.model, self.pretrained_path)
+        if self.pretrained_path and os.path.exists(self.pretrained_path):
+            load_pretrained_backbone(self.model, self.pretrained_path)
         
         # Freeze layers
         if self.config['model']['freeze_ratio'] > 0:
@@ -406,20 +414,13 @@ def main():
     print(f"Checkpoint dir: {args.checkpoint_dir}")
     print("="*50)
     
-    # Khởi tạo trainer
-    trainer = ArcFaceTrainer(args.config)
-    
-    # Override config nếu có args
-    if args.pretrained_backbone:
-        trainer.pretrained_path = args.pretrained_backbone
-    
-    if args.data_dir:
-        trainer.config['data']['train_csv'] = os.path.join(args.data_dir, 'train_metadata.csv')
-        trainer.config['data']['val_csv'] = os.path.join(args.data_dir, 'val_metadata.csv')
-    
-    if args.checkpoint_dir:
-        trainer.checkpoint_dir = Path(args.checkpoint_dir)
-        trainer.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    # Khởi tạo trainer với các override parameters
+    trainer = ArcFaceTrainer(
+        config_path=args.config,
+        pretrained_path=args.pretrained_backbone,
+        data_dir=args.data_dir,
+        checkpoint_dir=args.checkpoint_dir
+    )
     
     # Bắt đầu training
     try:

@@ -10,8 +10,15 @@ from PIL import Image
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
-import albumentations as A
-from albumentations.pytorch import ToTensorV2
+
+# Optional: albumentations (nếu không có sẽ dùng torchvision)
+try:
+    import albumentations as A
+    from albumentations.pytorch import ToTensorV2
+    HAS_ALBUMENTATIONS = True
+except ImportError:
+    HAS_ALBUMENTATIONS = False
+    print("⚠️ albumentations không có, sử dụng torchvision transforms")
 
 
 class ArcFaceDataset(Dataset):
@@ -72,7 +79,7 @@ def get_train_transforms(image_size=112, use_albumentations=False):
     """
     Transforms cho training set (có augmentation)
     """
-    if use_albumentations:
+    if use_albumentations and HAS_ALBUMENTATIONS:
         return A.Compose([
             A.Resize(image_size, image_size),
             A.HorizontalFlip(p=0.5),
@@ -92,6 +99,7 @@ def get_train_transforms(image_size=112, use_albumentations=False):
             ToTensorV2()
         ])
     else:
+        # Fallback to torchvision
         return transforms.Compose([
             transforms.Resize((image_size, image_size)),
             transforms.RandomHorizontalFlip(p=0.5),
@@ -111,13 +119,14 @@ def get_val_transforms(image_size=112, use_albumentations=False):
     """
     Transforms cho validation/test set (không có augmentation)
     """
-    if use_albumentations:
+    if use_albumentations and HAS_ALBUMENTATIONS:
         return A.Compose([
             A.Resize(image_size, image_size),
             A.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
             ToTensorV2()
         ])
     else:
+        # Fallback to torchvision
         return transforms.Compose([
             transforms.Resize((image_size, image_size)),
             transforms.ToTensor(),

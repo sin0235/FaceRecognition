@@ -62,6 +62,11 @@ wandb/
 *~
 .github/instructions
 
+# Test files (ignore để tránh lỗi dependencies)
+tests/test_*.py
+tests/*_test.py
+tests/create_dummy_data.py
+
 # OS
 .DS_Store
 Thumbs.db
