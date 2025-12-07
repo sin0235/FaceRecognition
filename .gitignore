@@ -6,12 +6,15 @@ __pycache__/
 .Python
 env/
 venv/
+.venv/
 ENV/
 *.egg-info/
 dist/
 build/
-
-arcface/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -21,13 +24,35 @@ arcface/
 data/raw/*
 data/processed/*
 data/embeddings/*
+data/celeb/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/embeddings/.gitkeep
+!data/celeb/.gitkeep
+*.npy
+*.npz
 
-# Model checkpoints
+# Uploads
+uploads/*
+!uploads/.gitkeep
+static/uploads/*
+
+# Model files
 models/checkpoints/*
 !models/checkpoints/.gitkeep
+*.pth
+*.pt
+*.onnx
+*.pb
+*.h5
+*.hdf5
+
+# Training artifacts
+logs/
+runs/
+*.log
+tensorboard_logs/
+wandb/
 
 # IDE
 .vscode/
@@ -35,6 +60,7 @@ models/checkpoints/*
 *.swp
 *.swo
 *~
+.github/instructions
 
 # OS
 .DS_Store
