@@ -11,6 +11,8 @@ ENV/
 dist/
 build/
 
+arcface/
+
 # Jupyter Notebook
 .ipynb_checkpoints
 *.ipynb_checkpoints
@@ -41,3 +43,4 @@ Thumbs.db
 # Logs
 *.log
 logs/
+my_task_dip.md
