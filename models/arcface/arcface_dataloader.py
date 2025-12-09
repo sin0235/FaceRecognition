@@ -18,7 +18,7 @@ try:
     HAS_ALBUMENTATIONS = True
 except ImportError:
     HAS_ALBUMENTATIONS = False
-    print("⚠️ albumentations không có, sử dụng torchvision transforms")
+    print("albumentations không có, sử dụng torchvision transforms")
 
 
 class ArcFaceDataset(Dataset):

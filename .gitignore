@@ -20,24 +20,28 @@ htmlcov/
 .ipynb_checkpoints
 *.ipynb_checkpoints
 
-# Dataset
+# Dataset (không commit dataset lớn)
 data/raw/*
 data/processed/*
 data/embeddings/*
-data/celeb/*
+data/archive/*
+archive/
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/embeddings/.gitkeep
-!data/celeb/.gitkeep
 *.npy
 *.npz
+
+# Celebrity images (chỉ giữ folder structure)
+data/celeb/*
+!data/celeb/.gitkeep
 
 # Uploads
 uploads/*
 !uploads/.gitkeep
 static/uploads/*
 
-# Model files
+# Model checkpoints (không commit model weights)
 models/checkpoints/*
 !models/checkpoints/.gitkeep
 *.pth
@@ -46,13 +50,16 @@ models/checkpoints/*
 *.pb
 *.h5
 *.hdf5
+*.caffemodel
+*.weights
 
-# Training artifacts
+# Training logs
 logs/
 runs/
 *.log
 tensorboard_logs/
 wandb/
+*.tfevents.*
 
 # IDE
 .vscode/
@@ -60,18 +67,27 @@ wandb/
 *.swp
 *.swo
 *~
-.github/instructions
-
-# Test files (ignore để tránh lỗi dependencies)
-tests/test_*.py
-tests/*_test.py
-tests/create_dummy_data.py
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Logs
-*.log
-logs/
+# Test files (đã xóa, tránh tái tạo)
+tests/test_*.py
+tests/*_test.py
+tests/create_dummy_data.py
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Environment variables
+.env
+.env.local
+
+# Personal notes (không share)
 my_task_dip.md
+TODO.md
+NOTES.md
