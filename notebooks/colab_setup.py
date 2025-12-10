@@ -49,7 +49,8 @@ def setup_colab_environment():
     DRIVE_ROOT = "/content/drive/MyDrive/FaceRecognition"
     
     os.makedirs(DRIVE_ROOT, exist_ok=True)
-    os.makedirs(f"{DRIVE_ROOT}/checkpoints", exist_ok=True)
+    os.makedirs(f"{DRIVE_ROOT}/models/checkpoints/arcface", exist_ok=True)
+    os.makedirs(f"{DRIVE_ROOT}/models/checkpoints/facenet", exist_ok=True)
     os.makedirs(f"{DRIVE_ROOT}/logs", exist_ok=True)
     os.makedirs(f"{DRIVE_ROOT}/data", exist_ok=True)
     

@@ -572,7 +572,7 @@ def full_pipeline(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extract embeddings")
-    parser.add_argument('--model-path', type=str, default='models/checkpoints/arcface_best.pth')
+    parser.add_argument('--model-path', type=str, default='models/checkpoints/arcface/arcface_best.pth')
     parser.add_argument('--mode', type=str, choices=['db', 'csv', 'full'], default='full',
                        help='db: build from folders, csv: from metadata CSV, full: full pipeline')
     parser.add_argument('--csv-path', type=str, default=None,

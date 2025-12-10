@@ -47,7 +47,7 @@ class RecognitionEngine:
     
     def __init__(
         self,
-        model_path: str = "models/checkpoints/arcface_best.pth",
+        model_path: str = "models/checkpoints/arcface/arcface_best.pth",
         db_path: str = None,
         faiss_index_path: str = None,
         prototypes_path: str = None,
@@ -342,7 +342,7 @@ if __name__ == "__main__":
     
     # Test voi dummy database
     db_path = "data/embeddings_db.npy"
-    model_path = "models/checkpoints/arcface_best.pth"
+    model_path = "models/checkpoints/arcface/arcface_best.pth"
     
     if os.path.exists(db_path) and os.path.exists(model_path):
         engine = RecognitionEngine(

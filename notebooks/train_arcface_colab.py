@@ -27,13 +27,13 @@ def setup_paths(drive_root=None, local_root=None):
     if IS_COLAB and drive_root:
         ROOT = "/content/FaceRecognition"
         DATA_DIR = os.path.join(drive_root, "CelebA_Aligned")
-        CHECKPOINT_DIR = os.path.join(drive_root, "models", "checkpoints")
+        CHECKPOINT_DIR = os.path.join(drive_root, "models", "checkpoints", "arcface")
         LOG_DIR = os.path.join(drive_root, "logs", "arcface")
         EMBEDDINGS_DIR = os.path.join(drive_root, "data", "embeddings")
     else:
         ROOT = local_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         DATA_DIR = os.path.join(ROOT, "data", "CelebA_Aligned")
-        CHECKPOINT_DIR = os.path.join(ROOT, "models", "checkpoints")
+        CHECKPOINT_DIR = os.path.join(ROOT, "models", "checkpoints", "arcface")
         LOG_DIR = os.path.join(ROOT, "logs", "arcface")
         EMBEDDINGS_DIR = os.path.join(ROOT, "data", "embeddings")
     

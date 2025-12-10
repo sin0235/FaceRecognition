@@ -81,7 +81,7 @@ data:
 
 # Checkpointing
 checkpoint:
-  save_dir: models/checkpoints
+  save_dir: models/checkpoints/arcface
   save_best: true
   save_interval: 10
 
