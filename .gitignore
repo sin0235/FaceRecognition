@@ -91,3 +91,7 @@ tests/create_dummy_data.py
 my_task_dip.md
 TODO.md
 NOTES.md
+
+
+#Tạm ignore file data, sau train xong mình thêm lại hen
+data/CelebA_Aligned/

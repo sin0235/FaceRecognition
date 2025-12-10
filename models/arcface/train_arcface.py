@@ -76,7 +76,7 @@ class ArcFaceTrainer:
         print(f"Log dir: {self.log_dir}")
     
     def setup_data(self):
-        """Khởi tạo DataLoaders"""
+        """Khoi tao DataLoaders"""
         print("\n=== Setup Data ===")
         
         train_csv = self.config['data']['train_csv']
@@ -85,16 +85,22 @@ class ArcFaceTrainer:
         num_workers = self.config['training']['num_workers']
         image_size = self.config['data']['image_size']
         
+        # Lay data_root neu co (cho format metadata cu)
+        train_data_root = self.config['data'].get('train_data_root', None)
+        val_data_root = self.config['data'].get('val_data_root', None)
+        
         self.train_loader, self.val_loader, self.num_classes = create_dataloaders(
             train_csv=train_csv,
             val_csv=val_csv,
             batch_size=batch_size,
             num_workers=num_workers,
             image_size=image_size,
-            use_albumentations=False
+            use_albumentations=False,
+            train_data_root=train_data_root,
+            val_data_root=val_data_root
         )
         
-        print(f"Số classes: {self.num_classes}")
+        print(f"So classes: {self.num_classes}")
     
     def setup_model(self):
         """Khởi tạo model"""

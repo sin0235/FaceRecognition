@@ -24,35 +24,77 @@ except ImportError:
 class ArcFaceDataset(Dataset):
     """
     Dataset cho ArcFace training
+    Ho tro 2 format CSV:
+    1. Format moi: image_path (full path), identity_name
+    2. Format cu: image (relative path), person_id, label
     """
-    def __init__(self, csv_path, transform=None, use_albumentations=False):
+    def __init__(self, csv_path, data_root=None, transform=None, use_albumentations=False):
         """
         Args:
-            csv_path: Đường dẫn đến file metadata CSV
-            transform: Transforms để áp dụng
-            use_albumentations: Sử dụng albumentations thay vì torchvision
+            csv_path: Duong dan den file metadata CSV
+            data_root: Thu muc goc chua anh (chi can khi dung relative path)
+            transform: Transforms de ap dung
+            use_albumentations: Su dung albumentations thay vi torchvision
         """
         self.df = pd.read_csv(csv_path)
+        self.data_root = data_root
         self.transform = transform
         self.use_albumentations = use_albumentations
         
-        # Ánh xạ identity name sang integer labels
-        self.identity_to_label = {identity: idx for idx, identity in 
-                                  enumerate(self.df['identity_name'].unique())}
+        # Auto-detect format
+        if 'image_path' in self.df.columns and 'identity_name' in self.df.columns:
+            # Format moi
+            self.path_col = 'image_path'
+            self.identity_col = 'identity_name'
+        elif 'image' in self.df.columns and 'person_id' in self.df.columns:
+            # Format cu - can data_root
+            self.path_col = 'image'
+            self.identity_col = 'person_id'
+            if data_root is None:
+                csv_dir = os.path.dirname(csv_path)
+                # Tim data_root tu csv_path: .../metadata/ -> .../
+                self.data_root = os.path.dirname(csv_dir)
+                print(f"Auto-detected data_root: {self.data_root}")
+        else:
+            raise ValueError(f"CSV khong co columns can thiet. Columns: {list(self.df.columns)}")
+        
+        # Anh xa identity sang integer labels
+        unique_identities = sorted(self.df[self.identity_col].unique())
+        self.identity_to_label = {str(identity): idx for idx, identity in enumerate(unique_identities)}
         self.label_to_identity = {v: k for k, v in self.identity_to_label.items()}
         
         self.num_classes = len(self.identity_to_label)
         
-        print(f"Loaded {len(self.df)} ảnh với {self.num_classes} identities")
+        print(f"Loaded {len(self.df)} anh voi {self.num_classes} identities")
+        print(f"Format detected: path_col='{self.path_col}', identity_col='{self.identity_col}'")
     
     def __len__(self):
         return len(self.df)
     
+    def _get_image_path(self, row):
+        """Lay full path tu row"""
+        path = row[self.path_col]
+        if self.data_root and not os.path.isabs(path):
+            # Relative path - prepend data_root va split folder
+            split = os.path.basename(os.path.dirname(os.path.dirname(path))) or 'train'
+            # Path format: person_id/image.jpg
+            # Full path: data_root/split/person_id/image.jpg
+            return os.path.join(self.data_root, split, path)
+        return path
+    
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
-        image_path = row['image_path']
-        identity_name = row['identity_name']
-        label = self.identity_to_label[identity_name]
+        
+        # Lay path
+        if self.path_col == 'image' and self.data_root:
+            # Format cu: image = "person_id/img.jpg"
+            # Can xac dinh split tu csv_path
+            image_path = os.path.join(self.data_root, row[self.path_col])
+        else:
+            image_path = row[self.path_col]
+        
+        identity = str(row[self.identity_col])
+        label = self.identity_to_label[identity]
         
         try:
             image = Image.open(image_path).convert('RGB')
@@ -69,8 +111,7 @@ class ArcFaceDataset(Dataset):
             return image, label, image_path
             
         except Exception as e:
-            print(f"Lỗi khi load ảnh {image_path}: {e}")
-            # Return dummy data nếu có lỗi
+            print(f"Loi khi load anh {image_path}: {e}")
             dummy_image = torch.zeros(3, 112, 112)
             return dummy_image, label, image_path
 
@@ -135,17 +176,20 @@ def get_val_transforms(image_size=112, use_albumentations=False):
 
 
 def create_dataloaders(train_csv, val_csv, batch_size=64, num_workers=4, 
-                      image_size=112, use_albumentations=False):
+                      image_size=112, use_albumentations=False,
+                      train_data_root=None, val_data_root=None):
     """
-    Tạo DataLoaders cho training và validation
+    Tao DataLoaders cho training va validation
     
     Args:
-        train_csv: Đường dẫn đến train metadata CSV
-        val_csv: Đường dẫn đến validation metadata CSV
+        train_csv: Duong dan den train metadata CSV
+        val_csv: Duong dan den validation metadata CSV
         batch_size: Batch size
-        num_workers: Số workers cho parallel data loading
-        image_size: Kích thước ảnh
-        use_albumentations: Sử dụng albumentations
+        num_workers: So workers cho parallel data loading
+        image_size: Kich thuoc anh
+        use_albumentations: Su dung albumentations
+        train_data_root: Thu muc goc chua anh train (neu dung relative path)
+        val_data_root: Thu muc goc chua anh val (neu dung relative path)
     
     Returns:
         train_loader, val_loader, num_classes
@@ -155,12 +199,14 @@ def create_dataloaders(train_csv, val_csv, batch_size=64, num_workers=4,
     
     train_dataset = ArcFaceDataset(
         csv_path=train_csv,
+        data_root=train_data_root,
         transform=train_transform,
         use_albumentations=use_albumentations
     )
     
     val_dataset = ArcFaceDataset(
         csv_path=val_csv,
+        data_root=val_data_root,
         transform=val_transform,
         use_albumentations=use_albumentations
     )
@@ -265,38 +311,57 @@ def benchmark_dataloader(dataloader, num_iterations=100):
 
 def test_dataloader():
     """
-    Test DataLoader với dummy metadata
+    Test DataLoader voi ca 2 format metadata
     """
     print("Testing DataLoader...")
     
-    # Tạo dummy metadata CSV
-    dummy_data = {
-        'image_path': ['data/test_img.jpg'] * 100,
-        'identity_name': [f'person_{i%10}' for i in range(100)],
-        'identity_id': [i%10 for i in range(100)]
-    }
+    os.makedirs('data/test_split', exist_ok=True)
     
-    df = pd.DataFrame(dummy_data)
-    os.makedirs('data', exist_ok=True)
-    df.to_csv('data/test_metadata.csv', index=False)
+    # Test format moi (full path)
+    print("\n=== Test format moi (image_path, identity_name) ===")
+    dummy_data_new = {
+        'image_path': ['data/test_split/test_img.jpg'] * 100,
+        'identity_name': [f'person_{i%10}' for i in range(100)],
+    }
+    df_new = pd.DataFrame(dummy_data_new)
+    df_new.to_csv('data/test_metadata_new.csv', index=False)
+    
+    # Test format cu (relative path)
+    print("\n=== Test format cu (image, person_id, label) ===")
+    dummy_data_old = {
+        'image': [f'{i%10}/test_img.jpg' for i in range(100)],
+        'person_id': [i%10 for i in range(100)],
+        'label': [i%10 for i in range(100)]
+    }
+    df_old = pd.DataFrame(dummy_data_old)
+    df_old.to_csv('data/test_metadata_old.csv', index=False)
     
     try:
         train_transform = get_train_transforms(image_size=112)
-        dataset = ArcFaceDataset('data/test_metadata.csv', transform=train_transform)
         
-        print(f"Dataset size: {len(dataset)}")
-        print(f"Num classes: {dataset.num_classes}")
-        print(f"Identity mapping: {dataset.identity_to_label}")
+        # Test format moi
+        dataset_new = ArcFaceDataset('data/test_metadata_new.csv', transform=train_transform)
+        print(f"Format moi - Num classes: {dataset_new.num_classes}")
         
-        loader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=0)
+        # Test format cu voi data_root
+        dataset_old = ArcFaceDataset('data/test_metadata_old.csv', 
+                                     data_root='data/test_split',
+                                     transform=train_transform)
+        print(f"Format cu - Num classes: {dataset_old.num_classes}")
         
-        print("\nDataLoader test thành công!")
+        print("\nDataLoader test thanh cong!")
         
     except Exception as e:
-        print(f"Lỗi: {e}")
+        print(f"Loi: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
-        if os.path.exists('data/test_metadata.csv'):
-            os.remove('data/test_metadata.csv')
+        import shutil
+        for f in ['data/test_metadata_new.csv', 'data/test_metadata_old.csv']:
+            if os.path.exists(f):
+                os.remove(f)
+        if os.path.exists('data/test_split'):
+            shutil.rmtree('data/test_split')
 
 
 if __name__ == "__main__":

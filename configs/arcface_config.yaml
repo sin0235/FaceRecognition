@@ -45,8 +45,17 @@ training:
 
 # Data
 data:
-  train_csv: data/processed/train_metadata.csv
-  val_csv: data/processed/val_metadata.csv
+  # Local path (khi chay tren Windows)
+  train_csv: data/CelebA_Aligned/metadata/train_labels_filtered.csv
+  val_csv: data/CelebA_Aligned/metadata/val_labels_filtered.csv
+  # Data root cho relative path trong CSV
+  train_data_root: data/CelebA_Aligned/train
+  val_data_root: data/CelebA_Aligned/val
+  # Colab path (uncomment khi chay tren Colab)
+  # train_csv: /content/drive/MyDrive/FaceRecognition/CelebA_Aligned/metadata/train_labels_filtered.csv
+  # val_csv: /content/drive/MyDrive/FaceRecognition/CelebA_Aligned/metadata/val_labels_filtered.csv
+  # train_data_root: /content/drive/MyDrive/FaceRecognition/CelebA_Aligned/train
+  # val_data_root: /content/drive/MyDrive/FaceRecognition/CelebA_Aligned/val
   image_size: 112
   
   # Augmentation cho training
