@@ -46,6 +46,7 @@ models/checkpoints/*
 !models/checkpoints/.gitkeep
 
 *.pt
+*.pth
 *.onnx
 *.pb
 *.h5
