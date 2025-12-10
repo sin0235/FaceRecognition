@@ -1,11 +1,12 @@
-# Cấu hình ArcFace Training
+# Cau hinh ArcFace Training
+# Ho tro ca Local va Google Colab
 
 # Model Architecture
 model:
   backbone: resnet50
   embedding_size: 512
   pretrained: true
-  freeze_ratio: 0.8  # Đóng băng 80% lớp đầu của backbone
+  freeze_ratio: 0.8  # Dong bang 80% lop dau cua backbone
 
 # ArcFace Loss
 arcface:
@@ -43,19 +44,16 @@ training:
     patience: 10
     min_delta: 0.001
 
-# Data
+# Data Configuration
+# Su dung bien moi truong hoac override tu command line
 data:
-  # Local path (khi chay tren Windows)
+  # Default paths (local Windows)
   train_csv: data/CelebA_Aligned/metadata/train_labels_filtered.csv
   val_csv: data/CelebA_Aligned/metadata/val_labels_filtered.csv
-  # Data root cho relative path trong CSV
   train_data_root: data/CelebA_Aligned/train
   val_data_root: data/CelebA_Aligned/val
-  # Colab path (uncomment khi chay tren Colab)
-  # train_csv: /content/drive/MyDrive/FaceRecognition/CelebA_Aligned/metadata/train_labels_filtered.csv
-  # val_csv: /content/drive/MyDrive/FaceRecognition/CelebA_Aligned/metadata/val_labels_filtered.csv
-  # train_data_root: /content/drive/MyDrive/FaceRecognition/CelebA_Aligned/train
-  # val_data_root: /content/drive/MyDrive/FaceRecognition/CelebA_Aligned/val
+  
+  # Image settings
   image_size: 112
   
   # Augmentation cho training
@@ -68,7 +66,7 @@ data:
       saturation: 0.1
       hue: 0.05
   
-  # Normalization
+  # Normalization (ArcFace standard)
   normalize:
     mean: [0.5, 0.5, 0.5]
     std: [0.5, 0.5, 0.5]
@@ -77,20 +75,36 @@ data:
 checkpoint:
   save_dir: models/checkpoints
   save_best: true
-  save_interval: 10  # Lưu mỗi 10 epochs
-  metric: val_accuracy  # Metric để chọn best model
+  save_interval: 10
+  metric: val_accuracy
 
 # Logging
 logging:
   use_tensorboard: true
   log_dir: logs/arcface
-  log_interval: 100  # Log mỗi 100 iterations
+  log_interval: 100
   
   # Embedding visualization
   embedding_vis:
     enabled: true
-    interval: 5  # Visualize mỗi 5 epochs
+    interval: 5
     num_samples: 1000
 
-# Device
-device: cuda  # cuda hoặc cpu
+# Device (auto-detect neu de cuda)
+device: cuda
+
+# ============================================
+# GOOGLE COLAB CONFIGURATION
+# Uncomment section nay khi chay tren Colab
+# ============================================
+# colab:
+#   drive_root: /content/drive/MyDrive/FaceRecognition
+#   data:
+#     train_csv: /content/drive/MyDrive/FaceRecognition/CelebA_Aligned/metadata/train_labels_filtered.csv
+#     val_csv: /content/drive/MyDrive/FaceRecognition/CelebA_Aligned/metadata/val_labels_filtered.csv
+#     train_data_root: /content/drive/MyDrive/FaceRecognition/CelebA_Aligned/train
+#     val_data_root: /content/drive/MyDrive/FaceRecognition/CelebA_Aligned/val
+#   checkpoint:
+#     save_dir: /content/drive/MyDrive/FaceRecognition/models/checkpoints
+#   logging:
+#     log_dir: /content/drive/MyDrive/FaceRecognition/logs/arcface

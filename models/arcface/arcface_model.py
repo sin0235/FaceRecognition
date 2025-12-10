@@ -1,20 +1,32 @@
 """
 ArcFace Model Implementation
-Bao gồm ResNet50 backbone và ArcFace loss layer
+Bao gom ResNet50 backbone va ArcFace loss layer
+Ho tro: download pretrained weights, mixed precision training
 """
 
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Parameter
 import math
+from typing import Optional, Tuple
+
+
+PRETRAINED_URLS = {
+    'resnet50_imagenet': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
+    'resnet50_vggface2': None,
+    'resnet50_ms1mv2': None,
+}
 
 
 class ArcMarginProduct(nn.Module):
     """
     ArcFace Loss Layer (Additive Angular Margin)
+    Cong thuc: cos(theta + m)
     """
-    def __init__(self, in_features, out_features, scale=64.0, margin=0.5, easy_margin=False):
+    def __init__(self, in_features: int, out_features: int, 
+                 scale: float = 64.0, margin: float = 0.5, easy_margin: bool = False):
         super(ArcMarginProduct, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -30,9 +42,9 @@ class ArcMarginProduct(nn.Module):
         self.th = math.cos(math.pi - margin)
         self.mm = math.sin(math.pi - margin) * margin
     
-    def forward(self, input, label):
+    def forward(self, input: torch.Tensor, label: torch.Tensor) -> torch.Tensor:
         cosine = F.linear(F.normalize(input), F.normalize(self.weight))
-        sine = torch.sqrt(1.0 - torch.pow(cosine, 2))
+        sine = torch.sqrt(torch.clamp(1.0 - torch.pow(cosine, 2), min=1e-7))
         
         phi = cosine * self.cos_m - sine * self.sin_m
         
@@ -53,14 +65,26 @@ class ArcMarginProduct(nn.Module):
 class ResNetBackbone(nn.Module):
     """
     ResNet50 Backbone cho feature extraction
+    Output: 2048-dim feature vector
     """
-    def __init__(self, pretrained=True):
+    def __init__(self, pretrained: bool = True, pretrained_path: Optional[str] = None):
         super(ResNetBackbone, self).__init__()
         
         import torchvision.models as models
-        resnet = models.resnet50(pretrained=pretrained)
         
-        # Lấy tất cả layers trừ FC cuối
+        # Load ResNet50
+        if pretrained and pretrained_path is None:
+            try:
+                resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
+                print("Loaded ImageNet pretrained weights")
+            except:
+                resnet = models.resnet50(pretrained=True)
+                print("Loaded ImageNet pretrained weights (legacy)")
+        else:
+            resnet = models.resnet50(pretrained=False)
+            if pretrained_path and os.path.exists(pretrained_path):
+                self._load_custom_pretrained(resnet, pretrained_path)
+        
         self.conv1 = resnet.conv1
         self.bn1 = resnet.bn1
         self.relu = resnet.relu
@@ -72,8 +96,26 @@ class ResNetBackbone(nn.Module):
         self.layer4 = resnet.layer4
         
         self.avgpool = resnet.avgpool
+    
+    def _load_custom_pretrained(self, resnet, path):
+        """Load custom pretrained weights"""
+        try:
+            state_dict = torch.load(path, map_location='cpu', weights_only=False)
+            if 'state_dict' in state_dict:
+                state_dict = state_dict['state_dict']
+            
+            # Filter keys that match
+            model_dict = resnet.state_dict()
+            pretrained_dict = {k: v for k, v in state_dict.items() 
+                             if k in model_dict and model_dict[k].shape == v.shape}
+            
+            model_dict.update(pretrained_dict)
+            resnet.load_state_dict(model_dict)
+            print(f"Loaded {len(pretrained_dict)}/{len(model_dict)} layers from {path}")
+        except Exception as e:
+            print(f"Failed to load custom pretrained: {e}")
         
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -92,17 +134,25 @@ class ResNetBackbone(nn.Module):
 
 class ArcFaceModel(nn.Module):
     """
-    ArcFace Model hoàn chỉnh
+    ArcFace Model hoan chinh
+    
+    Architecture:
+        ResNet50 Backbone (2048-dim) -> BN -> Dropout -> FC (512-dim) -> BN -> ArcFace Head
     """
-    def __init__(self, num_classes, embedding_size=512, pretrained=True, 
-                 scale=64.0, margin=0.5, easy_margin=False):
+    def __init__(self, num_classes: int, embedding_size: int = 512, 
+                 pretrained: bool = True, pretrained_path: Optional[str] = None,
+                 scale: float = 64.0, margin: float = 0.5, easy_margin: bool = False,
+                 dropout: float = 0.5):
         super(ArcFaceModel, self).__init__()
         
-        self.backbone = ResNetBackbone(pretrained=pretrained)
+        self.num_classes = num_classes
+        self.embedding_size = embedding_size
         
-        # Feature dimension từ ResNet50 là 2048
+        self.backbone = ResNetBackbone(pretrained=pretrained, pretrained_path=pretrained_path)
+        
+        # Feature dimension tu ResNet50 la 2048
         self.bn1 = nn.BatchNorm1d(2048)
-        self.dropout = nn.Dropout(p=0.5)
+        self.dropout = nn.Dropout(p=dropout)
         
         # Embedding layer
         self.fc = nn.Linear(2048, embedding_size)
@@ -116,8 +166,28 @@ class ArcFaceModel(nn.Module):
             margin=margin,
             easy_margin=easy_margin
         )
+        
+        # Initialize weights
+        self._init_weights()
     
-    def forward(self, x, labels=None):
+    def _init_weights(self):
+        """Khoi tao weights cho FC layer"""
+        nn.init.kaiming_normal_(self.fc.weight, mode='fan_out', nonlinearity='relu')
+        if self.fc.bias is not None:
+            nn.init.constant_(self.fc.bias, 0)
+    
+    def forward(self, x: torch.Tensor, labels: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        Forward pass
+        
+        Args:
+            x: Input images (B, 3, H, W)
+            labels: Class labels (B,) - required for training with ArcFace loss
+            
+        Returns:
+            If labels provided: (logits, embeddings)
+            If labels is None: embeddings only
+        """
         x = self.backbone(x)
         x = self.bn1(x)
         x = self.dropout(x)
@@ -131,58 +201,87 @@ class ArcFaceModel(nn.Module):
         else:
             return embeddings
     
-    def extract_features(self, x):
+    def extract_features(self, x: torch.Tensor, normalize: bool = True) -> torch.Tensor:
         """
-        Trích xuất embeddings (dùng cho inference)
+        Trich xuat embeddings (dung cho inference)
+        
+        Args:
+            x: Input images
+            normalize: L2 normalize embeddings
         """
+        self.eval()
         with torch.no_grad():
             embeddings = self.forward(x, labels=None)
-            embeddings = F.normalize(embeddings)
+            if normalize:
+                embeddings = F.normalize(embeddings, p=2, dim=1)
         return embeddings
+    
+    def get_embedding_dim(self) -> int:
+        return self.embedding_size
 
 
-def freeze_layers(model, freeze_ratio=0.8):
+def freeze_layers(model: ArcFaceModel, freeze_ratio: float = 0.8) -> ArcFaceModel:
     """
-    Đóng băng một phần backbone để fine-tune
+    Dong bang mot phan backbone de fine-tune
     
     Args:
         model: ArcFaceModel instance
-        freeze_ratio: Tỷ lệ layers cần đóng băng (0.8 = 80%)
+        freeze_ratio: Ty le layers can dong bang (0.8 = 80%)
     """
     backbone_params = list(model.backbone.parameters())
     num_params = len(backbone_params)
     num_freeze = int(num_params * freeze_ratio)
     
     for i, param in enumerate(backbone_params):
-        if i < num_freeze:
-            param.requires_grad = False
-        else:
-            param.requires_grad = True
+        param.requires_grad = (i >= num_freeze)
     
     frozen_count = sum(1 for p in backbone_params if not p.requires_grad)
     trainable_count = sum(1 for p in backbone_params if p.requires_grad)
     
-    print(f"Backbone: {frozen_count} layers đóng băng, {trainable_count} layers trainable")
+    print(f"Backbone: {frozen_count} params frozen, {trainable_count} params trainable")
     
     return model
 
 
-def load_pretrained_backbone(model, checkpoint_path):
+def unfreeze_all(model: ArcFaceModel) -> ArcFaceModel:
+    """Mo dong bang tat ca layers"""
+    for param in model.parameters():
+        param.requires_grad = True
+    print("Unfreeze all layers")
+    return model
+
+
+def freeze_bn(model: ArcFaceModel) -> ArcFaceModel:
+    """Dong bang BatchNorm layers (useful for small batch sizes)"""
+    for module in model.modules():
+        if isinstance(module, nn.BatchNorm2d) or isinstance(module, nn.BatchNorm1d):
+            module.eval()
+            for param in module.parameters():
+                param.requires_grad = False
+    print("BatchNorm layers frozen")
+    return model
+
+
+def load_pretrained_backbone(model: ArcFaceModel, checkpoint_path: str) -> ArcFaceModel:
     """
     Load pretrained weights cho backbone
-    
-    Args:
-        model: ArcFaceModel instance
-        checkpoint_path: Đường dẫn đến file checkpoint
     """
+    if not os.path.exists(checkpoint_path):
+        print(f"Checkpoint khong ton tai: {checkpoint_path}")
+        print("Su dung ImageNet pretrained weights")
+        return model
+    
     try:
-        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
         
         if 'state_dict' in checkpoint:
             state_dict = checkpoint['state_dict']
+        elif 'model_state_dict' in checkpoint:
+            state_dict = checkpoint['model_state_dict']
         else:
             state_dict = checkpoint
         
+        # Try to load backbone weights
         backbone_state_dict = {}
         for key, value in state_dict.items():
             if key.startswith('backbone.'):
@@ -191,31 +290,56 @@ def load_pretrained_backbone(model, checkpoint_path):
         
         if backbone_state_dict:
             model.backbone.load_state_dict(backbone_state_dict, strict=False)
-            print(f"Đã load pretrained backbone từ {checkpoint_path}")
+            print(f"Da load pretrained backbone tu {checkpoint_path}")
         else:
-            print("Không tìm thấy backbone weights trong checkpoint")
+            # Try loading full model
+            model.load_state_dict(state_dict, strict=False)
+            print(f"Da load full model tu {checkpoint_path}")
             
     except Exception as e:
-        print(f"Lỗi khi load checkpoint: {e}")
-        print("Sử dụng ImageNet pretrained weights từ torchvision")
+        print(f"Loi khi load checkpoint: {e}")
+        print("Su dung ImageNet pretrained weights")
+    
+    return model
+
+
+def get_model_summary(model: ArcFaceModel) -> dict:
+    """Lay thong tin tong quan ve model"""
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    
+    return {
+        'num_classes': model.num_classes,
+        'embedding_size': model.embedding_size,
+        'total_params': total_params,
+        'trainable_params': trainable_params,
+        'trainable_ratio': trainable_params / total_params * 100
+    }
 
 
 def test_model():
-    """
-    Test model với dummy data
-    """
-    print("Testing ArcFace Model...")
+    """Test model voi dummy data"""
+    print("="*50)
+    print("Testing ArcFace Model")
+    print("="*50)
     
     num_classes = 100
     batch_size = 8
     
     model = ArcFaceModel(num_classes=num_classes, embedding_size=512)
-    model.eval()
+    
+    # Model summary
+    summary = get_model_summary(model)
+    print(f"\nModel Summary:")
+    print(f"  - Num classes: {summary['num_classes']}")
+    print(f"  - Embedding size: {summary['embedding_size']}")
+    print(f"  - Total params: {summary['total_params']:,}")
+    print(f"  - Trainable params: {summary['trainable_params']:,} ({summary['trainable_ratio']:.1f}%)")
     
     dummy_images = torch.randn(batch_size, 3, 112, 112)
     dummy_labels = torch.randint(0, num_classes, (batch_size,))
     
-    print(f"Input shape: {dummy_images.shape}")
+    print(f"\nInput shape: {dummy_images.shape}")
     
     # Test training mode
     model.train()
@@ -227,16 +351,18 @@ def test_model():
     model.eval()
     embeddings = model.extract_features(dummy_images)
     print(f"Inference embeddings shape: {embeddings.shape}")
+    print(f"Embeddings normalized: {torch.allclose(embeddings.norm(dim=1), torch.ones(batch_size))}")
     
     # Test freezing
+    print("\n--- Test Freezing ---")
     model = freeze_layers(model, freeze_ratio=0.8)
     
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    total_params = sum(p.numel() for p in model.parameters())
-    print(f"\nTổng parameters: {total_params:,}")
-    print(f"Trainable parameters: {trainable_params:,} ({100*trainable_params/total_params:.1f}%)")
+    summary_frozen = get_model_summary(model)
+    print(f"After freezing: {summary_frozen['trainable_params']:,} trainable ({summary_frozen['trainable_ratio']:.1f}%)")
     
-    print("\nModel test thành công!")
+    print("\nModel test thanh cong!")
+    
+    return model
 
 
 if __name__ == "__main__":

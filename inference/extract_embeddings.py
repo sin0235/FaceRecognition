@@ -1,18 +1,22 @@
 """
 Extract Embeddings Script
-Trích xuất embeddings từ ảnh sử dụng trained ArcFace model
+Trich xuat embeddings tu anh su dung trained ArcFace model
+Ho tro: FAISS index, prototype computation, t-SNE visualization
 """
 
 import os
 import sys
 import argparse
 import numpy as np
+import pandas as pd
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
 from PIL import Image
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
 from torchvision import transforms
 from tqdm import tqdm
 
@@ -20,38 +24,50 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(ROOT_DIR)
 
 
-def load_arcface_model(model_path: str, device: str = 'cpu') -> nn.Module:
+def load_arcface_model(model_path: str, device: str = 'cpu') -> Tuple[nn.Module, dict]:
     """
     Load trained ArcFace model
     
     Args:
-        model_path: Đường dẫn đến file checkpoint (.pth)
-        device: 'cuda' hoặc 'cpu'
+        model_path: Duong dan den file checkpoint (.pth)
+        device: 'cuda' hoac 'cpu'
         
     Returns:
-        Model đã load weights
+        (model, checkpoint_info)
     """
     from models.arcface.arcface_model import ArcFaceModel
     
     if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model không tồn tại: {model_path}")
+        raise FileNotFoundError(f"Model khong ton tai: {model_path}")
     
-    checkpoint = torch.load(model_path, map_location=device)
+    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     
-    num_classes = checkpoint.get('num_classes', 100)
-    embedding_size = checkpoint.get('embedding_size', 512)
+    # Lay thong tin tu checkpoint hoac config
+    config = checkpoint.get('config', {})
+    num_classes = config.get('num_classes', checkpoint.get('num_classes', 100))
+    embedding_size = config.get('model', {}).get('embedding_size', 512)
     
     model = ArcFaceModel(num_classes=num_classes, embedding_size=embedding_size)
-    
     model.load_state_dict(checkpoint['model_state_dict'])
     model.to(device)
     model.eval()
     
+    info = {
+        'num_classes': num_classes,
+        'embedding_size': embedding_size,
+        'epoch': checkpoint.get('epoch', 'N/A'),
+        'val_acc': checkpoint.get('val_acc', 'N/A'),
+        'best_val_acc': checkpoint.get('best_val_acc', 'N/A')
+    }
+    
     print(f"Loaded model from {model_path}")
     print(f"  - Num classes: {num_classes}")
     print(f"  - Embedding size: {embedding_size}")
+    print(f"  - Epoch: {info['epoch']}")
+    if info['val_acc'] != 'N/A':
+        print(f"  - Val accuracy: {info['val_acc']:.2f}%")
     
-    return model
+    return model, info
 
 
 def get_transform(image_size: int = 112):
@@ -63,56 +79,371 @@ def get_transform(image_size: int = 112):
     ])
 
 
-def extract_embedding_single_image(
-    img_path: str, 
-    model: nn.Module, 
-    transform, 
+def extract_embedding_single(
+    img_input,
+    model: nn.Module,
+    transform,
     device: str = 'cpu'
 ) -> Optional[np.ndarray]:
     """
-    Trích xuất embedding cho 1 ảnh
+    Trich xuat embedding cho 1 anh
     
     Args:
-        img_path: Đường dẫn ảnh
+        img_input: Duong dan anh hoac PIL Image
         model: ArcFace model
         transform: Image transform
         device: Device
         
     Returns:
-        Embedding vector (numpy array) hoặc None nếu lỗi
+        Embedding vector (numpy array) hoac None neu loi
     """
     try:
-        img = Image.open(img_path).convert('RGB')
+        if isinstance(img_input, str):
+            img = Image.open(img_input).convert('RGB')
+        else:
+            img = img_input.convert('RGB')
+            
         img_tensor = transform(img).unsqueeze(0).to(device)
         
         with torch.no_grad():
-            _, embedding = model(img_tensor, labels=None)
+            embedding = model(img_tensor, labels=None)
+            embedding = F.normalize(embedding, p=2, dim=1)
             embedding = embedding.cpu().numpy().flatten()
         
         return embedding
         
     except Exception as e:
-        print(f"Lỗi xử lý {img_path}: {e}")
+        if isinstance(img_input, str):
+            print(f"Loi xu ly {img_input}: {e}")
         return None
 
 
+def extract_embeddings_batch(
+    image_paths: List[str],
+    model: nn.Module,
+    transform,
+    device: str = 'cpu',
+    batch_size: int = 64
+) -> Tuple[np.ndarray, List[str]]:
+    """
+    Trich xuat embeddings cho nhieu anh (batch processing)
+    
+    Returns:
+        (embeddings array, valid_paths list)
+    """
+    embeddings = []
+    valid_paths = []
+    
+    for i in tqdm(range(0, len(image_paths), batch_size), desc="Extracting"):
+        batch_paths = image_paths[i:i+batch_size]
+        batch_images = []
+        batch_valid_paths = []
+        
+        for path in batch_paths:
+            try:
+                img = Image.open(path).convert('RGB')
+                img_tensor = transform(img)
+                batch_images.append(img_tensor)
+                batch_valid_paths.append(path)
+            except Exception as e:
+                print(f"Skip {path}: {e}")
+                continue
+        
+        if len(batch_images) == 0:
+            continue
+            
+        batch_tensor = torch.stack(batch_images).to(device)
+        
+        with torch.no_grad():
+            batch_embeddings = model(batch_tensor, labels=None)
+            batch_embeddings = F.normalize(batch_embeddings, p=2, dim=1)
+            batch_embeddings = batch_embeddings.cpu().numpy()
+        
+        embeddings.append(batch_embeddings)
+        valid_paths.extend(batch_valid_paths)
+    
+    if len(embeddings) == 0:
+        return np.array([]), []
+    
+    return np.vstack(embeddings), valid_paths
+
+
+def extract_embeddings_from_csv(
+    model_path: str,
+    csv_path: str,
+    data_root: str = None,
+    output_dir: str = "data/embeddings",
+    device: str = None,
+    batch_size: int = 64
+) -> Dict:
+    """
+    Trich xuat embeddings tu metadata CSV (training set)
+    
+    Args:
+        model_path: Duong dan checkpoint
+        csv_path: Duong dan file metadata CSV
+        data_root: Thu muc goc chua anh
+        output_dir: Thu muc luu output
+        device: cuda/cpu
+        batch_size: Batch size
+        
+    Returns:
+        Dict chua thong tin embeddings
+    """
+    print("="*60)
+    print("EXTRACT EMBEDDINGS FROM TRAINING SET")
+    print("="*60)
+    
+    if device is None:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print(f"Device: {device}")
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    model, model_info = load_arcface_model(model_path, device)
+    transform = get_transform()
+    
+    df = pd.read_csv(csv_path)
+    print(f"\nLoaded CSV: {len(df)} samples")
+    
+    # Auto-detect columns
+    if 'image_path' in df.columns:
+        path_col = 'image_path'
+    elif 'image' in df.columns:
+        path_col = 'image'
+    else:
+        raise ValueError(f"CSV khong co cot path. Columns: {list(df.columns)}")
+    
+    if 'identity_name' in df.columns:
+        id_col = 'identity_name'
+    elif 'person_id' in df.columns:
+        id_col = 'person_id'
+    else:
+        raise ValueError(f"CSV khong co cot identity. Columns: {list(df.columns)}")
+    
+    # Build full paths
+    if data_root:
+        image_paths = [os.path.join(data_root, p) for p in df[path_col]]
+    else:
+        image_paths = df[path_col].tolist()
+    
+    identities = df[id_col].astype(str).tolist()
+    
+    # Create label mapping
+    unique_ids = sorted(set(identities))
+    id_to_label = {id_: idx for idx, id_ in enumerate(unique_ids)}
+    labels = [id_to_label[id_] for id_ in identities]
+    
+    print(f"Unique identities: {len(unique_ids)}")
+    
+    # Extract embeddings
+    embeddings, valid_paths = extract_embeddings_batch(
+        image_paths, model, transform, device, batch_size
+    )
+    
+    # Filter valid samples
+    valid_indices = [image_paths.index(p) for p in valid_paths]
+    valid_labels = [labels[i] for i in valid_indices]
+    valid_identities = [identities[i] for i in valid_indices]
+    
+    print(f"\nExtracted {len(embeddings)} embeddings")
+    
+    # Save embeddings
+    embeddings_path = os.path.join(output_dir, "arcface_train_embeddings.npy")
+    np.save(embeddings_path, embeddings)
+    print(f"Saved embeddings: {embeddings_path}")
+    
+    # Save metadata
+    meta_df = pd.DataFrame({
+        'image_path': valid_paths,
+        'identity': valid_identities,
+        'label': valid_labels
+    })
+    meta_path = os.path.join(output_dir, "embeddings_metadata.csv")
+    meta_df.to_csv(meta_path, index=False)
+    print(f"Saved metadata: {meta_path}")
+    
+    # Save label mapping
+    mapping_path = os.path.join(output_dir, "label_mapping.npy")
+    np.save(mapping_path, {'id_to_label': id_to_label, 'label_to_id': {v:k for k,v in id_to_label.items()}})
+    print(f"Saved label mapping: {mapping_path}")
+    
+    return {
+        'embeddings': embeddings,
+        'labels': np.array(valid_labels),
+        'identities': valid_identities,
+        'paths': valid_paths,
+        'id_to_label': id_to_label
+    }
+
+
+def compute_prototypes(
+    embeddings: np.ndarray,
+    labels: np.ndarray,
+    output_path: str = None
+) -> np.ndarray:
+    """
+    Tinh prototype (mean embedding) cho moi identity
+    
+    Args:
+        embeddings: (N, D) embeddings array
+        labels: (N,) label array
+        output_path: Duong dan luu prototypes
+        
+    Returns:
+        (num_classes, D) prototype array
+    """
+    print("\n=== COMPUTING PROTOTYPES ===")
+    
+    unique_labels = np.unique(labels)
+    num_classes = len(unique_labels)
+    embedding_dim = embeddings.shape[1]
+    
+    prototypes = np.zeros((num_classes, embedding_dim), dtype=np.float32)
+    
+    for label in unique_labels:
+        mask = labels == label
+        class_embeddings = embeddings[mask]
+        prototype = class_embeddings.mean(axis=0)
+        prototype = prototype / (np.linalg.norm(prototype) + 1e-8)
+        prototypes[label] = prototype
+    
+    print(f"Computed {num_classes} prototypes")
+    
+    if output_path:
+        np.save(output_path, prototypes)
+        print(f"Saved prototypes: {output_path}")
+    
+    return prototypes
+
+
+def build_faiss_index(
+    embeddings: np.ndarray,
+    output_path: str = None,
+    use_gpu: bool = False
+):
+    """
+    Xay dung FAISS index tu embeddings
+    
+    Args:
+        embeddings: (N, D) embeddings array (da L2 normalize)
+        output_path: Duong dan luu index
+        use_gpu: Su dung GPU FAISS
+        
+    Returns:
+        FAISS index
+    """
+    try:
+        import faiss
+    except ImportError:
+        print("FAISS chua duoc cai dat. Chay: pip install faiss-cpu hoac faiss-gpu")
+        return None
+    
+    print("\n=== BUILDING FAISS INDEX ===")
+    
+    embeddings = embeddings.astype('float32')
+    
+    # L2 normalize (neu chua)
+    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+    embeddings = embeddings / (norms + 1e-8)
+    
+    dim = embeddings.shape[1]
+    
+    # IndexFlatIP cho cosine similarity (vi da normalize)
+    index = faiss.IndexFlatIP(dim)
+    
+    if use_gpu and faiss.get_num_gpus() > 0:
+        print("Using GPU FAISS")
+        res = faiss.StandardGpuResources()
+        index = faiss.index_cpu_to_gpu(res, 0, index)
+    
+    index.add(embeddings)
+    
+    print(f"Index built: {index.ntotal} vectors, {dim}D")
+    
+    if output_path:
+        if use_gpu:
+            index = faiss.index_gpu_to_cpu(index)
+        faiss.write_index(index, output_path)
+        print(f"Saved FAISS index: {output_path}")
+    
+    return index
+
+
+def visualize_tsne(
+    embeddings: np.ndarray,
+    labels: np.ndarray,
+    output_path: str,
+    num_samples: int = 2000,
+    perplexity: int = 30
+):
+    """
+    Visualize embedding space voi t-SNE
+    
+    Args:
+        embeddings: (N, D) embeddings array
+        labels: (N,) label array
+        output_path: Duong dan luu anh
+        num_samples: So samples toi da (de tang toc)
+        perplexity: t-SNE perplexity
+    """
+    try:
+        from sklearn.manifold import TSNE
+        import matplotlib.pyplot as plt
+    except ImportError:
+        print("Thieu sklearn/matplotlib. Chay: pip install scikit-learn matplotlib")
+        return
+    
+    print("\n=== T-SNE VISUALIZATION ===")
+    
+    # Subsample neu qua nhieu
+    if len(embeddings) > num_samples:
+        indices = np.random.choice(len(embeddings), num_samples, replace=False)
+        embeddings = embeddings[indices]
+        labels = labels[indices]
+    
+    print(f"Running t-SNE on {len(embeddings)} samples...")
+    
+    tsne = TSNE(n_components=2, random_state=42, perplexity=perplexity, n_iter=1000)
+    embeddings_2d = tsne.fit_transform(embeddings)
+    
+    plt.figure(figsize=(14, 12))
+    
+    num_classes = len(np.unique(labels))
+    if num_classes <= 20:
+        cmap = 'tab20'
+    else:
+        cmap = 'viridis'
+    
+    scatter = plt.scatter(
+        embeddings_2d[:, 0], 
+        embeddings_2d[:, 1],
+        c=labels,
+        cmap=cmap,
+        alpha=0.6,
+        s=15
+    )
+    
+    plt.colorbar(scatter, label='Identity')
+    plt.title(f'ArcFace Embedding Space (t-SNE)\n{len(np.unique(labels))} identities, {len(embeddings)} samples')
+    plt.xlabel('t-SNE dimension 1')
+    plt.ylabel('t-SNE dimension 2')
+    
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    
+    print(f"Saved t-SNE visualization: {output_path}")
+
+
 def extract_embedding_for_folder(
-    folder: str, 
-    model: nn.Module, 
-    transform, 
+    folder: str,
+    model: nn.Module,
+    transform,
     device: str = 'cpu'
 ) -> Optional[np.ndarray]:
     """
-    Trích xuất và tính trung bình embeddings cho tất cả ảnh trong folder
-    
-    Args:
-        folder: Đường dẫn folder chứa ảnh
-        model: ArcFace model
-        transform: Image transform
-        device: Device
-        
-    Returns:
-        Mean embedding vector
+    Trich xuat va tinh trung binh embeddings cho tat ca anh trong folder
     """
     if not os.path.exists(folder):
         return None
@@ -122,8 +453,7 @@ def extract_embedding_for_folder(
     for f in os.listdir(folder):
         if f.lower().endswith(('.jpg', '.jpeg', '.png')):
             img_path = os.path.join(folder, f)
-            emb = extract_embedding_single_image(img_path, model, transform, device)
-            
+            emb = extract_embedding_single(img_path, model, transform, device)
             if emb is not None:
                 embeddings.append(emb)
     
@@ -132,6 +462,7 @@ def extract_embedding_for_folder(
     
     stacked = np.stack(embeddings, axis=0)
     mean_emb = np.mean(stacked, axis=0)
+    mean_emb = mean_emb / (np.linalg.norm(mean_emb) + 1e-8)
     
     return mean_emb
 
@@ -143,13 +474,7 @@ def build_db(
     device: str = None
 ) -> None:
     """
-    Build embedding database từ folder celebrities
-    
-    Args:
-        model_path: Đường dẫn đến trained model
-        root_folder: Folder chứa các subfolder của từng celebrity
-        save_path: Đường dẫn lưu database
-        device: 'cuda' hoặc 'cpu', None = auto detect
+    Build embedding database tu folder celebrities
     """
     print("="*60)
     print("EXTRACT EMBEDDINGS DATABASE")
@@ -161,71 +486,137 @@ def build_db(
     print(f"\nDevice: {device}")
     
     if not os.path.exists(root_folder):
-        print(f"Root folder không tồn tại: {root_folder}")
+        print(f"Root folder khong ton tai: {root_folder}")
         return
     
-    model = load_arcface_model(model_path, device)
+    model, _ = load_arcface_model(model_path, device)
     transform = get_transform()
     
     db: Dict[str, np.ndarray] = {}
     
-    persons = [p for p in os.listdir(root_folder) 
+    persons = [p for p in os.listdir(root_folder)
                if os.path.isdir(os.path.join(root_folder, p))]
     
-    print(f"\nTìm thấy {len(persons)} celebrities")
-    print("Đang extract embeddings...\n")
+    print(f"\nTim thay {len(persons)} celebrities")
+    print("Dang extract embeddings...\n")
     
     for person in tqdm(persons, desc="Processing"):
         person_folder = os.path.join(root_folder, person)
-        
         emb = extract_embedding_for_folder(person_folder, model, transform, device)
-        
         if emb is not None:
             db[person] = emb
     
     if len(db) == 0:
-        print("\nKhông có embeddings nào được tạo!")
+        print("\nKhong co embeddings nao duoc tao!")
         return
     
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    os.makedirs(os.path.dirname(save_path) if os.path.dirname(save_path) else '.', exist_ok=True)
     np.save(save_path, db)
     
-    print(f"\nĐã lưu {len(db)} embeddings vào {save_path}")
+    print(f"\nDa luu {len(db)} embeddings vao {save_path}")
     print("\nDatabase ready!")
 
 
+def full_pipeline(
+    model_path: str,
+    csv_path: str,
+    data_root: str = None,
+    output_dir: str = "data/embeddings",
+    device: str = None,
+    batch_size: int = 64
+):
+    """
+    Chay full pipeline: extract embeddings -> prototypes -> FAISS -> t-SNE
+    """
+    print("="*60)
+    print("FULL EMBEDDING EXTRACTION PIPELINE")
+    print("="*60)
+    
+    # 1. Extract embeddings
+    result = extract_embeddings_from_csv(
+        model_path=model_path,
+        csv_path=csv_path,
+        data_root=data_root,
+        output_dir=output_dir,
+        device=device,
+        batch_size=batch_size
+    )
+    
+    embeddings = result['embeddings']
+    labels = result['labels']
+    
+    # 2. Compute prototypes
+    prototype_path = os.path.join(output_dir, "arcface_prototypes.npy")
+    prototypes = compute_prototypes(embeddings, labels, prototype_path)
+    
+    # 3. Build FAISS index
+    faiss_path = os.path.join(output_dir, "arcface_index.faiss")
+    build_faiss_index(prototypes, faiss_path)
+    
+    # 4. t-SNE visualization
+    tsne_path = os.path.join(output_dir, "tsne_visualization.png")
+    visualize_tsne(embeddings, labels, tsne_path)
+    
+    print("\n" + "="*60)
+    print("PIPELINE COMPLETE")
+    print("="*60)
+    print(f"Output directory: {output_dir}")
+    print("Files created:")
+    print(f"  - arcface_train_embeddings.npy")
+    print(f"  - embeddings_metadata.csv")
+    print(f"  - label_mapping.npy")
+    print(f"  - arcface_prototypes.npy")
+    print(f"  - arcface_index.faiss")
+    print(f"  - tsne_visualization.png")
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Extract embeddings database")
-    parser.add_argument(
-        '--model-path', 
-        type=str, 
-        default='models/checkpoints/arcface_best.pth',
-        help='Đường dẫn đến trained model'
-    )
-    parser.add_argument(
-        '--data-dir', 
-        type=str, 
-        default='data/celeb',
-        help='Folder chứa ảnh celebrities'
-    )
-    parser.add_argument(
-        '--output-path', 
-        type=str, 
-        default='data/embeddings_db.npy',
-        help='Đường dẫn lưu database'
-    )
-    parser.add_argument(
-        '--device',
-        type=str,
-        default=None,
-        help='cuda hoặc cpu (default: auto)'
-    )
+    parser = argparse.ArgumentParser(description="Extract embeddings")
+    parser.add_argument('--model-path', type=str, default='models/checkpoints/arcface_best.pth')
+    parser.add_argument('--mode', type=str, choices=['db', 'csv', 'full'], default='full',
+                       help='db: build from folders, csv: from metadata CSV, full: full pipeline')
+    parser.add_argument('--csv-path', type=str, default=None,
+                       help='Path to metadata CSV (for csv/full mode)')
+    parser.add_argument('--data-root', type=str, default=None,
+                       help='Root folder for images')
+    parser.add_argument('--data-dir', type=str, default='data/celeb',
+                       help='Folder chua anh celebrities (for db mode)')
+    parser.add_argument('--output-dir', type=str, default='data/embeddings')
+    parser.add_argument('--output-path', type=str, default='data/embeddings_db.npy',
+                       help='Output path for db mode')
+    parser.add_argument('--device', type=str, default=None)
+    parser.add_argument('--batch-size', type=int, default=64)
     
     args = parser.parse_args()
     
-    build_db(
-        model_path=args.model_path,
-        root_folder=args.data_dir,
-        save_path=args.output_path,
-        device=args.device
-    )
+    if args.mode == 'db':
+        build_db(
+            model_path=args.model_path,
+            root_folder=args.data_dir,
+            save_path=args.output_path,
+            device=args.device
+        )
+    elif args.mode == 'csv':
+        if args.csv_path is None:
+            print("Vui long cung cap --csv-path")
+        else:
+            extract_embeddings_from_csv(
+                model_path=args.model_path,
+                csv_path=args.csv_path,
+                data_root=args.data_root,
+                output_dir=args.output_dir,
+                device=args.device,
+                batch_size=args.batch_size
+            )
+    else:  # full
+        if args.csv_path is None:
+            print("Vui long cung cap --csv-path cho full pipeline")
+        else:
+            full_pipeline(
+                model_path=args.model_path,
+                csv_path=args.csv_path,
+                data_root=args.data_root,
+                output_dir=args.output_dir,
+                device=args.device,
+                batch_size=args.batch_size
+            )
