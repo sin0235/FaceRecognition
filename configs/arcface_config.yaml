@@ -10,8 +10,8 @@ model:
 
 # ArcFace Loss
 arcface:
-  margin: 0.5  # m parameter (angular margin)
-  scale: 64.0  # s parameter (feature scale)
+  margin: 0.35  # m parameter - giam tu 0.5 de de hoi tu hon voi nhieu classes
+  scale: 30.0   # s parameter - giam tu 64 de gradients on dinh hon
   easy_margin: false
 
 # Training Configuration
@@ -20,22 +20,28 @@ training:
   batch_size: 64
   num_workers: 4
   
+  # Warmup (quan trong cho ArcFace voi nhieu classes)
+  warmup:
+    enabled: true
+    epochs: 5           # So epochs warmup
+    start_lr: 0.0001    # LR bat dau
+  
   # Optimizer: sgd, adam, adamw
   optimizer:
     type: sgd
-    lr: 0.01
+    lr: 0.001           # Giam tu 0.01 xuong 0.001
     momentum: 0.9
     weight_decay: 0.0005
   
   # Learning Rate Scheduler
   # Options: step, cosine, plateau
   scheduler:
-    type: step        # step | cosine | plateau
+    type: cosine        # Cosine tot hon cho ArcFace
     # StepLR params
-    step_size: 10     # Giam LR moi step_size epochs
-    gamma: 0.1        # Nhan LR voi gamma
+    step_size: 10       # Giam LR moi step_size epochs
+    gamma: 0.1          # Nhan LR voi gamma
     # CosineAnnealingLR params
-    eta_min: 0.000001 # LR toi thieu
+    eta_min: 0.00001    # LR toi thieu
     # ReduceLROnPlateau params (type: plateau)
     # mode: min       # min cho loss, max cho accuracy
     # factor: 0.1     # Nhan LR voi factor khi khong cai thien

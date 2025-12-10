@@ -210,25 +210,35 @@ class ArcFaceTrainer:
         print("\n=== Setup Optimizer ===")
         
         opt_config = self.config['training']['optimizer']
+        self.target_lr = opt_config['lr']
+        
+        # Warmup config
+        warmup_config = self.config['training'].get('warmup', {})
+        self.warmup_enabled = warmup_config.get('enabled', False)
+        self.warmup_epochs = warmup_config.get('epochs', 5)
+        self.warmup_start_lr = warmup_config.get('start_lr', 0.0001)
+        
+        # Set initial LR (warmup start or target)
+        initial_lr = self.warmup_start_lr if self.warmup_enabled else self.target_lr
         
         # Optimizer
         if opt_config['type'].lower() == 'sgd':
             self.optimizer = optim.SGD(
                 self.model.parameters(),
-                lr=opt_config['lr'],
+                lr=initial_lr,
                 momentum=opt_config['momentum'],
                 weight_decay=opt_config['weight_decay']
             )
         elif opt_config['type'].lower() == 'adam':
             self.optimizer = optim.Adam(
                 self.model.parameters(),
-                lr=opt_config['lr'],
+                lr=initial_lr,
                 weight_decay=opt_config.get('weight_decay', 0)
             )
         elif opt_config['type'].lower() == 'adamw':
             self.optimizer = optim.AdamW(
                 self.model.parameters(),
-                lr=opt_config['lr'],
+                lr=initial_lr,
                 weight_decay=opt_config.get('weight_decay', 0.01)
             )
         
@@ -246,7 +256,7 @@ class ArcFaceTrainer:
         elif sched_type == 'cosine':
             self.scheduler = CosineAnnealingLR(
                 self.optimizer,
-                T_max=self.config['training']['num_epochs'],
+                T_max=self.config['training']['num_epochs'] - self.warmup_epochs if self.warmup_enabled else self.config['training']['num_epochs'],
                 eta_min=sched_config.get('eta_min', 1e-6)
             )
             self.scheduler_type = 'epoch'
@@ -265,7 +275,9 @@ class ArcFaceTrainer:
             self.scheduler_type = None
         
         print(f"Optimizer: {opt_config['type']}")
-        print(f"Learning rate: {opt_config['lr']}")
+        print(f"Target learning rate: {self.target_lr}")
+        if self.warmup_enabled:
+            print(f"Warmup: {self.warmup_epochs} epochs ({self.warmup_start_lr} -> {self.target_lr})")
         print(f"Scheduler: {sched_type}")
     
     def setup_early_stopping(self):
@@ -437,8 +449,22 @@ class ArcFaceTrainer:
             torch.save(checkpoint, save_path)
             print(f"Saved checkpoint: {save_path}")
     
+    def adjust_warmup_lr(self, epoch):
+        """Dieu chinh LR trong giai doan warmup"""
+        if not self.warmup_enabled or epoch >= self.warmup_epochs:
+            return False
+        
+        # Linear warmup
+        warmup_factor = (epoch + 1) / self.warmup_epochs
+        new_lr = self.warmup_start_lr + (self.target_lr - self.warmup_start_lr) * warmup_factor
+        
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = new_lr
+        
+        return True
+    
     def train(self):
-        """Main training loop voi Early Stopping + LR Scheduling"""
+        """Main training loop voi Early Stopping + LR Scheduling + Warmup"""
         print("\n" + "="*60)
         print("BAT DAU TRAINING")
         print("="*60)
@@ -448,10 +474,14 @@ class ArcFaceTrainer:
         
         for epoch in range(num_epochs):
             self.current_epoch = epoch
+            
+            # Warmup LR adjustment
+            is_warmup = self.adjust_warmup_lr(epoch)
             current_lr = self.get_lr()
             
+            warmup_str = " [WARMUP]" if is_warmup else ""
             print(f"\n{'='*60}")
-            print(f"Epoch {epoch+1}/{num_epochs} | LR: {current_lr:.2e}")
+            print(f"Epoch {epoch+1}/{num_epochs} | LR: {current_lr:.2e}{warmup_str}")
             print(f"{'='*60}")
             
             # Train
@@ -460,8 +490,8 @@ class ArcFaceTrainer:
             # Validate
             val_loss, val_acc, embeddings, labels = self.validate()
             
-            # Update scheduler
-            if self.scheduler:
+            # Update scheduler (chi khi khong con warmup)
+            if self.scheduler and not is_warmup:
                 if self.scheduler_type == 'metric':
                     # ReduceLROnPlateau - can metric
                     self.scheduler.step(val_loss)
