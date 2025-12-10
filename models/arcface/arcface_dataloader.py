@@ -1,6 +1,7 @@
 """
 ArcFace DataLoader
-Xử lý tải dữ liệu và augmentation cho training/validation
+Xu ly tai du lieu va augmentation cho training/validation
+Ho tro nhieu format metadata CSV
 """
 
 import os
@@ -11,28 +12,28 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 
-# Optional: albumentations (nếu không có sẽ dùng torchvision)
 try:
     import albumentations as A
     from albumentations.pytorch import ToTensorV2
     HAS_ALBUMENTATIONS = True
 except ImportError:
     HAS_ALBUMENTATIONS = False
-    print("albumentations không có, sử dụng torchvision transforms")
 
 
 class ArcFaceDataset(Dataset):
     """
     Dataset cho ArcFace training
-    Ho tro 2 format CSV:
-    1. Format moi: image_path (full path), identity_name
-    2. Format cu: image (relative path), person_id, label
+    
+    Ho tro 3 format CSV:
+    1. CelebA format: image, identity_id, label
+    2. Full path format: image_path, identity_name
+    3. Legacy format: image, person_id
     """
     def __init__(self, csv_path, data_root=None, transform=None, use_albumentations=False):
         """
         Args:
             csv_path: Duong dan den file metadata CSV
-            data_root: Thu muc goc chua anh (chi can khi dung relative path)
+            data_root: Thu muc goc chua anh (vd: data/CelebA_Aligned/train)
             transform: Transforms de ap dung
             use_albumentations: Su dung albumentations thay vi torchvision
         """
@@ -40,86 +41,143 @@ class ArcFaceDataset(Dataset):
         self.data_root = data_root
         self.transform = transform
         self.use_albumentations = use_albumentations
+        self.csv_path = csv_path
         
-        # Auto-detect format
-        if 'image_path' in self.df.columns and 'identity_name' in self.df.columns:
-            # Format moi
+        # Auto-detect format va setup columns
+        self._detect_format()
+        
+        # Setup label mapping
+        self._setup_labels()
+        
+        print(f"Loaded {len(self.df)} images with {self.num_classes} identities")
+        print(f"Format: path_col='{self.path_col}', label_col='{self.label_col}'")
+    
+    def _detect_format(self):
+        """Auto-detect CSV format"""
+        cols = set(self.df.columns)
+        
+        # Format 1: CelebA format (image, identity_id, label)
+        if 'image' in cols and 'identity_id' in cols and 'label' in cols:
+            self.path_col = 'image'
+            self.identity_col = 'identity_id'
+            self.label_col = 'label'
+            self.has_precomputed_labels = True
+            print("Detected CelebA format (image, identity_id, label)")
+            
+        # Format 2: Full path format (image_path, identity_name)
+        elif 'image_path' in cols and 'identity_name' in cols:
             self.path_col = 'image_path'
             self.identity_col = 'identity_name'
-        elif 'image' in self.df.columns and 'person_id' in self.df.columns:
-            # Format cu - can data_root
+            self.label_col = None
+            self.has_precomputed_labels = False
+            print("Detected full path format (image_path, identity_name)")
+            
+        # Format 3: Legacy format (image, person_id)
+        elif 'image' in cols and 'person_id' in cols:
             self.path_col = 'image'
             self.identity_col = 'person_id'
-            if data_root is None:
-                csv_dir = os.path.dirname(csv_path)
-                # Tim data_root tu csv_path: .../metadata/ -> .../
-                self.data_root = os.path.dirname(csv_dir)
-                print(f"Auto-detected data_root: {self.data_root}")
+            self.label_col = 'label' if 'label' in cols else None
+            self.has_precomputed_labels = self.label_col is not None
+            print("Detected legacy format (image, person_id)")
+            
         else:
-            raise ValueError(f"CSV khong co columns can thiet. Columns: {list(self.df.columns)}")
+            raise ValueError(f"Unsupported CSV format. Columns: {list(cols)}")
         
-        # Anh xa identity sang integer labels
-        unique_identities = sorted(self.df[self.identity_col].unique())
-        self.identity_to_label = {str(identity): idx for idx, identity in enumerate(unique_identities)}
-        self.label_to_identity = {v: k for k, v in self.identity_to_label.items()}
-        
-        self.num_classes = len(self.identity_to_label)
-        
-        print(f"Loaded {len(self.df)} anh voi {self.num_classes} identities")
-        print(f"Format detected: path_col='{self.path_col}', identity_col='{self.identity_col}'")
+        # Auto-detect data_root neu chua co
+        if self.data_root is None and self.path_col == 'image':
+            csv_dir = os.path.dirname(self.csv_path)
+            parent_dir = os.path.dirname(csv_dir)
+            
+            # Detect split from csv filename
+            csv_name = os.path.basename(self.csv_path).lower()
+            if 'train' in csv_name:
+                split = 'train'
+            elif 'val' in csv_name:
+                split = 'val'
+            elif 'test' in csv_name:
+                split = 'test'
+            else:
+                split = 'train'
+            
+            potential_root = os.path.join(parent_dir, split)
+            if os.path.exists(potential_root):
+                self.data_root = potential_root
+                print(f"Auto-detected data_root: {self.data_root}")
+    
+    def _setup_labels(self):
+        """Setup label mapping"""
+        if self.has_precomputed_labels and self.label_col:
+            # Su dung labels da co san trong CSV
+            self.num_classes = self.df[self.label_col].nunique()
+            
+            # Tao mapping de tra ve identity name
+            if self.identity_col in self.df.columns:
+                label_to_id = self.df.groupby(self.label_col)[self.identity_col].first().to_dict()
+                self.label_to_identity = {int(k): str(v) for k, v in label_to_id.items()}
+                self.identity_to_label = {v: k for k, v in self.label_to_identity.items()}
+            else:
+                self.label_to_identity = {}
+                self.identity_to_label = {}
+        else:
+            # Tao labels tu identity column
+            unique_identities = sorted(self.df[self.identity_col].unique())
+            self.identity_to_label = {str(identity): idx for idx, identity in enumerate(unique_identities)}
+            self.label_to_identity = {v: k for k, v in self.identity_to_label.items()}
+            self.num_classes = len(self.identity_to_label)
     
     def __len__(self):
         return len(self.df)
     
-    def _get_image_path(self, row):
-        """Lay full path tu row"""
+    def get_image_path(self, idx):
+        """Lay full path cua anh tai index"""
+        row = self.df.iloc[idx]
         path = row[self.path_col]
+        
         if self.data_root and not os.path.isabs(path):
-            # Relative path - prepend data_root va split folder
-            split = os.path.basename(os.path.dirname(os.path.dirname(path))) or 'train'
-            # Path format: person_id/image.jpg
-            # Full path: data_root/split/person_id/image.jpg
-            return os.path.join(self.data_root, split, path)
+            return os.path.join(self.data_root, path)
         return path
     
-    def __getitem__(self, idx):
+    def get_label(self, idx):
+        """Lay label tai index"""
         row = self.df.iloc[idx]
         
-        # Lay path
-        if self.path_col == 'image' and self.data_root:
-            # Format cu: image = "person_id/img.jpg"
-            # Can xac dinh split tu csv_path
-            image_path = os.path.join(self.data_root, row[self.path_col])
+        if self.has_precomputed_labels and self.label_col:
+            return int(row[self.label_col])
         else:
-            image_path = row[self.path_col]
-        
-        identity = str(row[self.identity_col])
-        label = self.identity_to_label[identity]
+            identity = str(row[self.identity_col])
+            return self.identity_to_label[identity]
+    
+    def __getitem__(self, idx):
+        image_path = self.get_image_path(idx)
+        label = self.get_label(idx)
         
         try:
             image = Image.open(image_path).convert('RGB')
-            image = np.array(image)
             
             if self.transform:
                 if self.use_albumentations:
+                    image = np.array(image)
                     augmented = self.transform(image=image)
                     image = augmented['image']
                 else:
-                    image = Image.fromarray(image)
                     image = self.transform(image)
+            else:
+                image = transforms.ToTensor()(image)
             
             return image, label, image_path
             
         except Exception as e:
-            print(f"Loi khi load anh {image_path}: {e}")
+            print(f"Error loading {image_path}: {e}")
             dummy_image = torch.zeros(3, 112, 112)
             return dummy_image, label, image_path
+    
+    def get_identity_name(self, label):
+        """Lay ten identity tu label"""
+        return self.label_to_identity.get(label, f"ID_{label}")
 
 
 def get_train_transforms(image_size=112, use_albumentations=False):
-    """
-    Transforms cho training set (có augmentation)
-    """
+    """Transforms cho training set (co augmentation)"""
     if use_albumentations and HAS_ALBUMENTATIONS:
         return A.Compose([
             A.Resize(image_size, image_size),
@@ -140,7 +198,6 @@ def get_train_transforms(image_size=112, use_albumentations=False):
             ToTensorV2()
         ])
     else:
-        # Fallback to torchvision
         return transforms.Compose([
             transforms.Resize((image_size, image_size)),
             transforms.RandomHorizontalFlip(p=0.5),
@@ -157,9 +214,7 @@ def get_train_transforms(image_size=112, use_albumentations=False):
 
 
 def get_val_transforms(image_size=112, use_albumentations=False):
-    """
-    Transforms cho validation/test set (không có augmentation)
-    """
+    """Transforms cho validation/test set (khong augmentation)"""
     if use_albumentations and HAS_ALBUMENTATIONS:
         return A.Compose([
             A.Resize(image_size, image_size),
@@ -167,7 +222,6 @@ def get_val_transforms(image_size=112, use_albumentations=False):
             ToTensorV2()
         ])
     else:
-        # Fallback to torchvision
         return transforms.Compose([
             transforms.Resize((image_size, image_size)),
             transforms.ToTensor(),
@@ -175,7 +229,7 @@ def get_val_transforms(image_size=112, use_albumentations=False):
         ])
 
 
-def create_dataloaders(train_csv, val_csv, batch_size=64, num_workers=4, 
+def create_dataloaders(train_csv, val_csv, batch_size=64, num_workers=4,
                       image_size=112, use_albumentations=False,
                       train_data_root=None, val_data_root=None):
     """
@@ -186,10 +240,10 @@ def create_dataloaders(train_csv, val_csv, batch_size=64, num_workers=4,
         val_csv: Duong dan den validation metadata CSV
         batch_size: Batch size
         num_workers: So workers cho parallel data loading
-        image_size: Kich thuoc anh
+        image_size: Kich thuoc anh (default 112 cho ArcFace)
         use_albumentations: Su dung albumentations
-        train_data_root: Thu muc goc chua anh train (neu dung relative path)
-        val_data_root: Thu muc goc chua anh val (neu dung relative path)
+        train_data_root: Thu muc goc chua anh train
+        val_data_root: Thu muc goc chua anh val
     
     Returns:
         train_loader, val_loader, num_classes
@@ -197,6 +251,7 @@ def create_dataloaders(train_csv, val_csv, batch_size=64, num_workers=4,
     train_transform = get_train_transforms(image_size, use_albumentations)
     val_transform = get_val_transforms(image_size, use_albumentations)
     
+    print("\n=== Creating Train Dataset ===")
     train_dataset = ArcFaceDataset(
         csv_path=train_csv,
         data_root=train_data_root,
@@ -204,6 +259,7 @@ def create_dataloaders(train_csv, val_csv, batch_size=64, num_workers=4,
         use_albumentations=use_albumentations
     )
     
+    print("\n=== Creating Val Dataset ===")
     val_dataset = ArcFaceDataset(
         csv_path=val_csv,
         data_root=val_data_root,
@@ -231,23 +287,23 @@ def create_dataloaders(train_csv, val_csv, batch_size=64, num_workers=4,
     
     num_classes = train_dataset.num_classes
     
-    print(f"\nDataLoader Summary:")
-    print(f"Train: {len(train_dataset)} ảnh, {len(train_loader)} batches")
-    print(f"Val: {len(val_dataset)} ảnh, {len(val_loader)} batches")
+    print(f"\n=== DataLoader Summary ===")
+    print(f"Train: {len(train_dataset)} images, {len(train_loader)} batches")
+    print(f"Val: {len(val_dataset)} images, {len(val_loader)} batches")
     print(f"Num classes: {num_classes}")
+    print(f"Batch size: {batch_size}")
     
     return train_loader, val_loader, num_classes
 
 
 def visualize_batch(dataloader, num_images=16, save_path=None):
-    """
-    Visualize một batch ảnh để kiểm tra augmentation
-    """
+    """Visualize mot batch anh de kiem tra augmentation"""
     import matplotlib.pyplot as plt
     
     images, labels, paths = next(iter(dataloader))
     images = images[:num_images]
     labels = labels[:num_images]
+    paths = paths[:num_images]
     
     # Denormalize
     mean = torch.tensor([0.5, 0.5, 0.5]).view(3, 1, 1)
@@ -255,16 +311,23 @@ def visualize_batch(dataloader, num_images=16, save_path=None):
     images = images * std + mean
     images = torch.clamp(images, 0, 1)
     
-    fig, axes = plt.subplots(4, 4, figsize=(12, 12))
-    axes = axes.flatten()
+    nrows = int(np.ceil(np.sqrt(num_images)))
+    ncols = int(np.ceil(num_images / nrows))
     
-    for idx, (img, label) in enumerate(zip(images, labels)):
+    fig, axes = plt.subplots(nrows, ncols, figsize=(3*ncols, 3*nrows))
+    axes = axes.flatten() if num_images > 1 else [axes]
+    
+    for idx, (img, label, path) in enumerate(zip(images, labels, paths)):
         if idx >= len(axes):
             break
         
         img = img.permute(1, 2, 0).numpy()
         axes[idx].imshow(img)
-        axes[idx].set_title(f"Label: {label.item()}")
+        axes[idx].set_title(f"Label: {label.item()}", fontsize=8)
+        axes[idx].axis('off')
+    
+    # Hide empty subplots
+    for idx in range(len(images), len(axes)):
         axes[idx].axis('off')
     
     plt.tight_layout()
@@ -279,12 +342,10 @@ def visualize_batch(dataloader, num_images=16, save_path=None):
 
 
 def benchmark_dataloader(dataloader, num_iterations=100):
-    """
-    Đo tốc độ loading của DataLoader
-    """
+    """Do toc do loading cua DataLoader"""
     import time
     
-    print(f"Benchmarking DataLoader với {num_iterations} iterations...")
+    print(f"Benchmarking DataLoader ({num_iterations} iterations)...")
     
     start_time = time.time()
     total_images = 0
@@ -297,72 +358,61 @@ def benchmark_dataloader(dataloader, num_iterations=100):
     elapsed_time = time.time() - start_time
     images_per_second = total_images / elapsed_time
     
-    print(f"Loaded {total_images} ảnh trong {elapsed_time:.2f}s")
-    print(f"Tốc độ: {images_per_second:.1f} ảnh/giây")
+    print(f"Loaded {total_images} images in {elapsed_time:.2f}s")
+    print(f"Speed: {images_per_second:.1f} images/second")
     
     if images_per_second < 100:
-        print("Tốc độ thấp hơn mục tiêu (100 ảnh/s)")
-        print("Khuyến nghị: Tăng num_workers hoặc sử dụng SSD")
+        print("Speed is below target (100 img/s). Consider increasing num_workers.")
     else:
-        print("Tốc độ đạt yêu cầu!")
+        print("Speed OK!")
     
     return images_per_second
 
 
-def test_dataloader():
-    """
-    Test DataLoader voi ca 2 format metadata
-    """
-    print("Testing DataLoader...")
+def test_with_celeba_data():
+    """Test DataLoader voi CelebA metadata thuc te"""
+    print("="*60)
+    print("TEST DATALOADER WITH CELEBA METADATA")
+    print("="*60)
     
-    os.makedirs('data/test_split', exist_ok=True)
+    train_csv = "data/CelebA_Aligned/metadata/train_labels_filtered.csv"
+    val_csv = "data/CelebA_Aligned/metadata/val_labels_filtered.csv"
+    train_root = "data/CelebA_Aligned/train"
+    val_root = "data/CelebA_Aligned/val"
     
-    # Test format moi (full path)
-    print("\n=== Test format moi (image_path, identity_name) ===")
-    dummy_data_new = {
-        'image_path': ['data/test_split/test_img.jpg'] * 100,
-        'identity_name': [f'person_{i%10}' for i in range(100)],
-    }
-    df_new = pd.DataFrame(dummy_data_new)
-    df_new.to_csv('data/test_metadata_new.csv', index=False)
+    # Check files exist
+    for name, path in [("Train CSV", train_csv), ("Val CSV", val_csv),
+                       ("Train dir", train_root), ("Val dir", val_root)]:
+        if os.path.exists(path):
+            print(f"[OK] {name}: {path}")
+        else:
+            print(f"[MISSING] {name}: {path}")
+            return
     
-    # Test format cu (relative path)
-    print("\n=== Test format cu (image, person_id, label) ===")
-    dummy_data_old = {
-        'image': [f'{i%10}/test_img.jpg' for i in range(100)],
-        'person_id': [i%10 for i in range(100)],
-        'label': [i%10 for i in range(100)]
-    }
-    df_old = pd.DataFrame(dummy_data_old)
-    df_old.to_csv('data/test_metadata_old.csv', index=False)
+    # Create dataloaders
+    train_loader, val_loader, num_classes = create_dataloaders(
+        train_csv=train_csv,
+        val_csv=val_csv,
+        batch_size=32,
+        num_workers=0,
+        image_size=112,
+        train_data_root=train_root,
+        val_data_root=val_root
+    )
     
-    try:
-        train_transform = get_train_transforms(image_size=112)
-        
-        # Test format moi
-        dataset_new = ArcFaceDataset('data/test_metadata_new.csv', transform=train_transform)
-        print(f"Format moi - Num classes: {dataset_new.num_classes}")
-        
-        # Test format cu voi data_root
-        dataset_old = ArcFaceDataset('data/test_metadata_old.csv', 
-                                     data_root='data/test_split',
-                                     transform=train_transform)
-        print(f"Format cu - Num classes: {dataset_old.num_classes}")
-        
-        print("\nDataLoader test thanh cong!")
-        
-    except Exception as e:
-        print(f"Loi: {e}")
-        import traceback
-        traceback.print_exc()
-    finally:
-        import shutil
-        for f in ['data/test_metadata_new.csv', 'data/test_metadata_old.csv']:
-            if os.path.exists(f):
-                os.remove(f)
-        if os.path.exists('data/test_split'):
-            shutil.rmtree('data/test_split')
+    # Test loading
+    print("\n=== Test Loading ===")
+    images, labels, paths = next(iter(train_loader))
+    print(f"Batch shape: {images.shape}")
+    print(f"Labels: {labels[:5].tolist()}")
+    print(f"Sample paths: {paths[:2]}")
+    
+    # Check image exists
+    for path in paths[:3]:
+        print(f"  {path}: {'exists' if os.path.exists(path) else 'NOT FOUND'}")
+    
+    print("\nTest completed!")
 
 
 if __name__ == "__main__":
-    test_dataloader()
+    test_with_celeba_data()
