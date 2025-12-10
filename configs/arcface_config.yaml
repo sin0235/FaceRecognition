@@ -1,5 +1,5 @@
 # Cau hinh ArcFace Training
-# Ho tro ca Local va Google Colab
+# Ho tro: Early Stopping + Learning Rate Scheduling
 
 # Model Architecture
 model:
@@ -10,17 +10,17 @@ model:
 
 # ArcFace Loss
 arcface:
-  margin: 0.5  # m parameter
-  scale: 64.0  # s parameter
+  margin: 0.5  # m parameter (angular margin)
+  scale: 64.0  # s parameter (feature scale)
   easy_margin: false
 
-# Training
+# Training Configuration
 training:
   num_epochs: 50
   batch_size: 64
   num_workers: 4
   
-  # Optimizer
+  # Optimizer: sgd, adam, adamw
   optimizer:
     type: sgd
     lr: 0.01
@@ -28,10 +28,19 @@ training:
     weight_decay: 0.0005
   
   # Learning Rate Scheduler
+  # Options: step, cosine, plateau
   scheduler:
-    type: step
-    step_size: 10
-    gamma: 0.1
+    type: step        # step | cosine | plateau
+    # StepLR params
+    step_size: 10     # Giam LR moi step_size epochs
+    gamma: 0.1        # Nhan LR voi gamma
+    # CosineAnnealingLR params
+    eta_min: 0.000001 # LR toi thieu
+    # ReduceLROnPlateau params (type: plateau)
+    # mode: min       # min cho loss, max cho accuracy
+    # factor: 0.1     # Nhan LR voi factor khi khong cai thien
+    # patience: 5     # So epochs cho phep khong cai thien truoc khi giam LR
+    # min_lr: 0.0000001
   
   # Gradient Clipping
   grad_clip:
@@ -41,13 +50,12 @@ training:
   # Early Stopping
   early_stopping:
     enabled: true
-    patience: 10
-    min_delta: 0.001
+    patience: 10      # Dung sau patience epochs khong cai thien
+    min_delta: 0.001  # Nguong toi thieu de coi la "cai thien"
 
 # Data Configuration
-# Su dung bien moi truong hoac override tu command line
 data:
-  # Default paths (local Windows)
+  # Paths (local)
   train_csv: data/CelebA_Aligned/metadata/train_labels_filtered.csv
   val_csv: data/CelebA_Aligned/metadata/val_labels_filtered.csv
   train_data_root: data/CelebA_Aligned/train
@@ -56,7 +64,7 @@ data:
   # Image settings
   image_size: 112
   
-  # Augmentation cho training
+  # Augmentation
   augmentation:
     horizontal_flip: 0.5
     rotation_degrees: 10
@@ -66,7 +74,7 @@ data:
       saturation: 0.1
       hue: 0.05
   
-  # Normalization (ArcFace standard)
+  # Normalization
   normalize:
     mean: [0.5, 0.5, 0.5]
     std: [0.5, 0.5, 0.5]
@@ -76,7 +84,6 @@ checkpoint:
   save_dir: models/checkpoints
   save_best: true
   save_interval: 10
-  metric: val_accuracy
 
 # Logging
 logging:
@@ -84,27 +91,10 @@ logging:
   log_dir: logs/arcface
   log_interval: 100
   
-  # Embedding visualization
   embedding_vis:
     enabled: true
     interval: 5
     num_samples: 1000
 
-# Device (auto-detect neu de cuda)
+# Device
 device: cuda
-
-# ============================================
-# GOOGLE COLAB CONFIGURATION
-# Uncomment section nay khi chay tren Colab
-# ============================================
-# colab:
-#   drive_root: /content/drive/MyDrive/FaceRecognition
-#   data:
-#     train_csv: /content/drive/MyDrive/FaceRecognition/CelebA_Aligned/metadata/train_labels_filtered.csv
-#     val_csv: /content/drive/MyDrive/FaceRecognition/CelebA_Aligned/metadata/val_labels_filtered.csv
-#     train_data_root: /content/drive/MyDrive/FaceRecognition/CelebA_Aligned/train
-#     val_data_root: /content/drive/MyDrive/FaceRecognition/CelebA_Aligned/val
-#   checkpoint:
-#     save_dir: /content/drive/MyDrive/FaceRecognition/models/checkpoints
-#   logging:
-#     log_dir: /content/drive/MyDrive/FaceRecognition/logs/arcface
