@@ -107,8 +107,10 @@ class ArcFaceTrainer:
         
         # Override config neu co
         if data_dir:
-            self.config['data']['train_csv'] = os.path.join(data_dir, 'processed', 'train_metadata.csv')
-            self.config['data']['val_csv'] = os.path.join(data_dir, 'processed', 'val_metadata.csv')
+            self.config['data']['train_csv'] = os.path.join(data_dir, 'CelebA_Aligned', 'metadata', 'train_labels_filtered.csv')
+            self.config['data']['val_csv'] = os.path.join(data_dir, 'CelebA_Aligned', 'metadata', 'val_labels_filtered.csv')
+            self.config['data']['train_data_root'] = os.path.join(data_dir, 'CelebA_Aligned', 'train')
+            self.config['data']['val_data_root'] = os.path.join(data_dir, 'CelebA_Aligned', 'val')
         
         if checkpoint_dir:
             self.config['checkpoint']['save_dir'] = checkpoint_dir
