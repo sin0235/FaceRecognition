@@ -42,11 +42,11 @@ uploads/*
 static/uploads/*
 
 # Model checkpoints (không commit model weights)
-models/checkpoints/*
+# models/checkpoints/*
 !models/checkpoints/.gitkeep
 
 *.pt
-*.pth
+# *.pth
 *.onnx
 *.pb
 *.h5
