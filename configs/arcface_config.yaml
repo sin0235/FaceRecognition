@@ -89,7 +89,8 @@ data:
 checkpoint:
   save_dir: models/checkpoints/arcface
   save_best: true
-  save_interval: 10
+  save_interval: 1       # Luu moi epoch (quan trong cho Colab 12h limit)
+  keep_last_n: 3         # Chi giu 3 checkpoints gan nhat de tiet kiem dung luong
 
 # Logging
 logging:
