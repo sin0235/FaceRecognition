@@ -1,0 +1,22 @@
+model:
+  embedding_size: 512
+  pretrained: "vggface2"
+  margin: 0.5
+
+training:
+  batch_size: 32
+  num_epochs: 30
+  learning_rate: 0.0003
+  optimizer: "adam"
+  weight_decay: 0.0001
+  scheduler_step: 10
+  scheduler_gamma: 0.1
+
+dataset:
+  image_size: 160
+  train_csv: "data/metadata/train_metadata.csv"
+  val_csv: "data/metadata/val_metadata.csv"
+
+path:
+  checkpoint_dir: "models/checkpoints/facenet/"
+  logs_dir: "logs/facenet/"
