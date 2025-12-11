@@ -46,7 +46,8 @@ static/uploads/*
 !models/checkpoints/.gitkeep
 
 *.pt
-# *.pth
+*.pth
+*.pth.bak
 *.onnx
 *.pb
 *.h5
