@@ -15,7 +15,13 @@ from datetime import datetime
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.tensorboard import SummaryWriter
+try:
+    from torch.utils.tensorboard import SummaryWriter
+    TENSORBOARD_AVAILABLE = True
+except ImportError:
+    SummaryWriter = None
+    TENSORBOARD_AVAILABLE = False
+    print("Warning: TensorBoard not available, logging will be disabled")
 from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR, ReduceLROnPlateau
 from torch.amp import autocast, GradScaler
 import numpy as np
@@ -299,11 +305,13 @@ class ArcFaceTrainer:
     
     def setup_logging(self):
         """Khoi tao TensorBoard logging"""
-        if self.config['logging']['use_tensorboard']:
+        if self.config['logging']['use_tensorboard'] and TENSORBOARD_AVAILABLE:
             self.writer = SummaryWriter(self.log_dir)
             print(f"\nTensorBoard logging enabled: {self.log_dir}")
         else:
             self.writer = None
+            if self.config['logging']['use_tensorboard'] and not TENSORBOARD_AVAILABLE:
+                print("\nTensorBoard requested but not available - logging disabled")
     
     def setup_mixed_precision(self):
         """Khoi tao Mixed Precision Training (FP16)"""
