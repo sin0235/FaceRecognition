@@ -26,13 +26,13 @@ def setup_paths(drive_root=None, local_root=None):
     
     if IS_COLAB and drive_root:
         ROOT = "/content/FaceRecognition"
-        DATA_DIR = os.path.join(drive_root, "CelebA_Aligned")
+        DATA_DIR = os.path.join(drive_root, "CelebA_Aligned_Balanced")
         CHECKPOINT_DIR = os.path.join(drive_root, "models", "checkpoints", "arcface")
         LOG_DIR = os.path.join(drive_root, "logs", "arcface")
         EMBEDDINGS_DIR = os.path.join(drive_root, "data", "embeddings")
     else:
         ROOT = local_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        DATA_DIR = os.path.join(ROOT, "data", "CelebA_Aligned")
+        DATA_DIR = os.path.join(ROOT, "data", "CelebA_Aligned_Balanced")
         CHECKPOINT_DIR = os.path.join(ROOT, "models", "checkpoints", "arcface")
         LOG_DIR = os.path.join(ROOT, "logs", "arcface")
         EMBEDDINGS_DIR = os.path.join(ROOT, "data", "embeddings")
@@ -52,8 +52,8 @@ def setup_paths(drive_root=None, local_root=None):
         'log_dir': LOG_DIR,
         'embeddings_dir': EMBEDDINGS_DIR,
         'is_colab': IS_COLAB,
-        'train_csv': os.path.join(DATA_DIR, "metadata", "train_labels_filtered.csv"),
-        'val_csv': os.path.join(DATA_DIR, "metadata", "val_labels_filtered.csv"),
+        'train_csv': os.path.join(DATA_DIR, "metadata", "train_labels.csv"),
+        'val_csv': os.path.join(DATA_DIR, "metadata", "val_labels.csv"),
         'train_img_dir': os.path.join(DATA_DIR, "train"),
         'val_img_dir': os.path.join(DATA_DIR, "val"),
     }

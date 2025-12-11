@@ -696,10 +696,10 @@ def test_with_celeba_data():
     print("TEST DATALOADER WITH CELEBA METADATA")
     print("="*60)
     
-    train_csv = "data/CelebA_Aligned/metadata/train_labels_filtered.csv"
-    val_csv = "data/CelebA_Aligned/metadata/val_labels_filtered.csv"
-    train_root = "data/CelebA_Aligned/train"
-    val_root = "data/CelebA_Aligned/val"
+    train_csv = "data/CelebA_Aligned_Balanced/metadata/train_labels.csv"
+    val_csv = "data/CelebA_Aligned_Balanced/metadata/val_labels.csv"
+    train_root = "data/CelebA_Aligned_Balanced/train"
+    val_root = "data/CelebA_Aligned_Balanced/val"
     
     # Check files exist
     for name, path in [("Train CSV", train_csv), ("Val CSV", val_csv),
