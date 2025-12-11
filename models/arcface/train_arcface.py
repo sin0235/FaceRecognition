@@ -435,7 +435,11 @@ class ArcFaceTrainer:
             'best_val_acc': self.best_val_acc,
             'best_val_loss': self.best_val_loss,
             'config': self.config,
-            'num_classes': self.num_classes
+            'num_classes': self.num_classes,
+            'global_step': self.global_step,
+            'warmup_enabled': getattr(self, 'warmup_enabled', False),
+            'warmup_epochs': getattr(self, 'warmup_epochs', 0),
+            'target_lr': getattr(self, 'target_lr', self.config['training']['optimizer']['lr'])
         }
         
         if is_best:
@@ -443,11 +447,33 @@ class ArcFaceTrainer:
             torch.save(checkpoint, save_path)
             print(f"Saved best model: {save_path}")
         
+        # Luon luu checkpoint moi nhat (arcface_last.pth) de resume
+        last_path = self.checkpoint_dir / 'arcface_last.pth'
+        torch.save(checkpoint, last_path)
+        
         # Luu checkpoint dinh ky
-        if (self.current_epoch + 1) % self.config['checkpoint']['save_interval'] == 0:
+        save_interval = self.config['checkpoint'].get('save_interval', 1)
+        if (self.current_epoch + 1) % save_interval == 0:
             save_path = self.checkpoint_dir / f'arcface_epoch_{self.current_epoch+1}.pth'
             torch.save(checkpoint, save_path)
             print(f"Saved checkpoint: {save_path}")
+            
+            # Xoa checkpoint cu neu can
+            self._cleanup_old_checkpoints()
+    
+    def _cleanup_old_checkpoints(self):
+        """Xoa cac checkpoint cu, chi giu lai N checkpoints gan nhat"""
+        keep_last_n = self.config['checkpoint'].get('keep_last_n', 5)
+        
+        checkpoint_files = sorted(
+            self.checkpoint_dir.glob('arcface_epoch_*.pth'),
+            key=lambda x: int(x.stem.split('_')[-1]),
+            reverse=True
+        )
+        
+        for old_ckpt in checkpoint_files[keep_last_n:]:
+            old_ckpt.unlink()
+            print(f"Removed old checkpoint: {old_ckpt.name}")
     
     def adjust_warmup_lr(self, epoch):
         """Dieu chinh LR trong giai doan warmup"""
@@ -560,15 +586,27 @@ class ArcFaceTrainer:
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         
-        if checkpoint['scheduler_state_dict'] and self.scheduler:
+        if checkpoint.get('scheduler_state_dict') and self.scheduler:
             self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         
         self.current_epoch = checkpoint['epoch'] + 1
         self.best_val_acc = checkpoint['best_val_acc']
         self.best_val_loss = checkpoint.get('best_val_loss', float('inf'))
+        self.global_step = checkpoint.get('global_step', 0)
+        
+        # Restore warmup state neu can
+        if checkpoint.get('warmup_enabled'):
+            self.warmup_enabled = checkpoint['warmup_enabled']
+            self.warmup_epochs = checkpoint.get('warmup_epochs', 5)
+            self.target_lr = checkpoint.get('target_lr', self.config['training']['optimizer']['lr'])
         
         print(f"Resumed from epoch {self.current_epoch}")
         print(f"Best val acc so far: {self.best_val_acc:.2f}%")
+        print(f"Global step: {self.global_step}")
+        
+        # Kiem tra warmup status
+        if self.current_epoch < self.warmup_epochs:
+            print(f"Still in warmup phase ({self.current_epoch}/{self.warmup_epochs})")
 
 
 def parse_args():
