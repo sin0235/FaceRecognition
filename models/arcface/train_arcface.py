@@ -17,6 +17,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR, ReduceLROnPlateau
+from torch.cuda.amp import autocast, GradScaler
 import numpy as np
 from tqdm import tqdm
 from sklearn.manifold import TSNE
@@ -122,6 +123,7 @@ class ArcFaceTrainer:
         self.setup_optimizer()
         self.setup_early_stopping()
         self.setup_logging()
+        self.setup_mixed_precision()
         
         # Training state
         self.current_epoch = 0
@@ -303,12 +305,27 @@ class ArcFaceTrainer:
         else:
             self.writer = None
     
+    def setup_mixed_precision(self):
+        """Khoi tao Mixed Precision Training (FP16)"""
+        mp_config = self.config.get('mixed_precision', {})
+        self.use_amp = mp_config.get('enabled', False) and torch.cuda.is_available()
+        
+        if self.use_amp:
+            self.scaler = GradScaler()
+            print(f"\nMixed Precision (FP16): ENABLED - Tang toc 2-3x")
+        else:
+            self.scaler = None
+            if mp_config.get('enabled', False):
+                print(f"\nMixed Precision: DISABLED (CUDA khong kha dung)")
+            else:
+                print(f"\nMixed Precision: DISABLED")
+    
     def get_lr(self):
         """Lay learning rate hien tai"""
         return self.optimizer.param_groups[0]['lr']
     
     def train_epoch(self):
-        """Train mot epoch"""
+        """Train mot epoch (ho tro Mixed Precision)"""
         self.model.train()
         
         running_loss = 0.0
@@ -323,19 +340,37 @@ class ArcFaceTrainer:
             
             self.optimizer.zero_grad()
             
-            # Forward pass
-            outputs, embeddings = self.model(images, labels)
-            loss = self.criterion(outputs, labels)
-            
-            # Backward pass
-            loss.backward()
-            
-            # Gradient clipping
-            if self.config['training']['grad_clip']['enabled']:
-                max_norm = self.config['training']['grad_clip']['max_norm']
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
-            
-            self.optimizer.step()
+            # Forward pass voi Mixed Precision
+            if self.use_amp:
+                with autocast():
+                    outputs, embeddings = self.model(images, labels)
+                    loss = self.criterion(outputs, labels)
+                
+                # Backward pass voi GradScaler
+                self.scaler.scale(loss).backward()
+                
+                # Gradient clipping
+                if self.config['training']['grad_clip']['enabled']:
+                    self.scaler.unscale_(self.optimizer)
+                    max_norm = self.config['training']['grad_clip']['max_norm']
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
+                
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
+                # Forward pass binh thuong
+                outputs, embeddings = self.model(images, labels)
+                loss = self.criterion(outputs, labels)
+                
+                # Backward pass
+                loss.backward()
+                
+                # Gradient clipping
+                if self.config['training']['grad_clip']['enabled']:
+                    max_norm = self.config['training']['grad_clip']['max_norm']
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
+                
+                self.optimizer.step()
             
             # Statistics
             running_loss += loss.item()
@@ -363,7 +398,7 @@ class ArcFaceTrainer:
         return epoch_loss, epoch_acc
     
     def validate(self):
-        """Validation"""
+        """Validation (ho tro Mixed Precision)"""
         self.model.eval()
         
         running_loss = 0.0
@@ -378,15 +413,20 @@ class ArcFaceTrainer:
                 images = images.to(self.device)
                 labels = labels.to(self.device)
                 
-                outputs, embeddings = self.model(images, labels)
-                loss = self.criterion(outputs, labels)
+                if self.use_amp:
+                    with autocast():
+                        outputs, embeddings = self.model(images, labels)
+                        loss = self.criterion(outputs, labels)
+                else:
+                    outputs, embeddings = self.model(images, labels)
+                    loss = self.criterion(outputs, labels)
                 
                 running_loss += loss.item()
                 _, predicted = outputs.max(1)
                 total += labels.size(0)
                 correct += predicted.eq(labels).sum().item()
                 
-                all_embeddings.append(embeddings.cpu().numpy())
+                all_embeddings.append(embeddings.float().cpu().numpy())
                 all_labels.append(labels.cpu().numpy())
         
         val_loss = running_loss / len(self.val_loader)
@@ -430,6 +470,7 @@ class ArcFaceTrainer:
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'scheduler_state_dict': self.scheduler.state_dict() if self.scheduler else None,
+            'scaler_state_dict': self.scaler.state_dict() if self.scaler else None,
             'val_acc': val_acc,
             'val_loss': val_loss,
             'best_val_acc': self.best_val_acc,
@@ -439,7 +480,8 @@ class ArcFaceTrainer:
             'global_step': self.global_step,
             'warmup_enabled': getattr(self, 'warmup_enabled', False),
             'warmup_epochs': getattr(self, 'warmup_epochs', 0),
-            'target_lr': getattr(self, 'target_lr', self.config['training']['optimizer']['lr'])
+            'target_lr': getattr(self, 'target_lr', self.config['training']['optimizer']['lr']),
+            'use_amp': self.use_amp
         }
         
         if is_best:
@@ -589,6 +631,10 @@ class ArcFaceTrainer:
         if checkpoint.get('scheduler_state_dict') and self.scheduler:
             self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         
+        # Restore GradScaler state cho Mixed Precision
+        if checkpoint.get('scaler_state_dict') and self.scaler:
+            self.scaler.load_state_dict(checkpoint['scaler_state_dict'])
+        
         self.current_epoch = checkpoint['epoch'] + 1
         self.best_val_acc = checkpoint['best_val_acc']
         self.best_val_loss = checkpoint.get('best_val_loss', float('inf'))
@@ -603,6 +649,7 @@ class ArcFaceTrainer:
         print(f"Resumed from epoch {self.current_epoch}")
         print(f"Best val acc so far: {self.best_val_acc:.2f}%")
         print(f"Global step: {self.global_step}")
+        print(f"Mixed Precision: {'ENABLED' if self.use_amp else 'DISABLED'}")
         
         # Kiem tra warmup status
         if self.current_epoch < self.warmup_epochs:

@@ -105,3 +105,8 @@ logging:
 
 # Device
 device: cuda
+
+# Mixed Precision Training (FP16) - tang toc 2-3x tren GPU
+mixed_precision:
+  enabled: true         # Bat FP16 de tang toc training
+  opt_level: "O1"       # O1: mixed, O2: almost FP16
