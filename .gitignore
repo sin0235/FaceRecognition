@@ -42,11 +42,12 @@ uploads/*
 static/uploads/*
 
 # Model checkpoints (không commit model weights)
-models/checkpoints/*
+# models/checkpoints/*
 !models/checkpoints/.gitkeep
 
 *.pt
 *.pth
+*.pth.bak
 *.onnx
 *.pb
 *.h5
@@ -96,3 +97,4 @@ NOTES.md
 
 #Tạm ignore file data, sau train xong mình thêm lại hen
 data/CelebA_Aligned/
+data/meta_origin/

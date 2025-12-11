@@ -17,8 +17,14 @@ arcface:
 # Training Configuration
 training:
   num_epochs: 50
-  batch_size: 64
-  num_workers: 4
+  batch_size: 256
+  num_workers: 8
+  
+  # Warmup (quan trong cho ArcFace voi nhieu classes)
+  warmup:
+    enabled: true
+    epochs: 5           # So epochs warmup
+    start_lr: 0.0004    # LR bat dau (tang theo batch size)
   
   # Warmup (quan trong cho ArcFace voi nhieu classes)
   warmup:
@@ -29,7 +35,11 @@ training:
   # Optimizer: sgd, adam, adamw
   optimizer:
     type: sgd
+<<<<<<< HEAD
     lr: 0.001           # Giam tu 0.01 xuong 0.001
+=======
+    lr: 0.004           # Tang theo linear scaling (batch 256/64 = 4x)
+>>>>>>> a10b4250691c6ef0bbc40ff67c8d2b951775aabf
     momentum: 0.9
     weight_decay: 0.0005
   

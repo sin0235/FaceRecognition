@@ -17,7 +17,11 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR, ReduceLROnPlateau
+<<<<<<< HEAD
 from torch.cuda.amp import autocast, GradScaler
+=======
+from torch.amp import autocast, GradScaler
+>>>>>>> a10b4250691c6ef0bbc40ff67c8d2b951775aabf
 import numpy as np
 from tqdm import tqdm
 from sklearn.manifold import TSNE
@@ -311,7 +315,11 @@ class ArcFaceTrainer:
         self.use_amp = mp_config.get('enabled', False) and torch.cuda.is_available()
         
         if self.use_amp:
+<<<<<<< HEAD
             self.scaler = GradScaler()
+=======
+            self.scaler = GradScaler('cuda')
+>>>>>>> a10b4250691c6ef0bbc40ff67c8d2b951775aabf
             print(f"\nMixed Precision (FP16): ENABLED - Tang toc 2-3x")
         else:
             self.scaler = None
@@ -342,7 +350,11 @@ class ArcFaceTrainer:
             
             # Forward pass voi Mixed Precision
             if self.use_amp:
+<<<<<<< HEAD
                 with autocast():
+=======
+                with autocast('cuda'):
+>>>>>>> a10b4250691c6ef0bbc40ff67c8d2b951775aabf
                     outputs, embeddings = self.model(images, labels)
                     loss = self.criterion(outputs, labels)
                 
@@ -414,7 +426,11 @@ class ArcFaceTrainer:
                 labels = labels.to(self.device)
                 
                 if self.use_amp:
+<<<<<<< HEAD
                     with autocast():
+=======
+                    with autocast('cuda'):
+>>>>>>> a10b4250691c6ef0bbc40ff67c8d2b951775aabf
                         outputs, embeddings = self.model(images, labels)
                         loss = self.criterion(outputs, labels)
                 else:
