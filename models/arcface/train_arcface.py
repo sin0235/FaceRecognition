@@ -414,11 +414,7 @@ class ArcFaceTrainer:
                 labels = labels.to(self.device)
                 
                 if self.use_amp:
-<<<<<<< HEAD
-                    with autocast():
-=======
                     with autocast('cuda'):
->>>>>>> a10b4250691c6ef0bbc40ff67c8d2b951775aabf
                         outputs, embeddings = self.model(images, labels)
                         loss = self.criterion(outputs, labels)
                 else:
