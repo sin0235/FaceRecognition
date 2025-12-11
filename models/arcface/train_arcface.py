@@ -2,6 +2,7 @@
 ArcFace Training Script
 Script chinh de train mo hinh ArcFace
 Ho tro: Early Stopping + Learning Rate Scheduling
+Compatible with Kaggle/Colab environments
 """
 
 import os
@@ -11,23 +12,44 @@ import yaml
 from pathlib import Path
 import time
 from datetime import datetime
+import warnings
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+warnings.filterwarnings('ignore')
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-try:
-    from torch.utils.tensorboard import SummaryWriter
-    TENSORBOARD_AVAILABLE = True
-except ImportError:
-    SummaryWriter = None
-    TENSORBOARD_AVAILABLE = False
-    print("Warning: TensorBoard not available, logging will be disabled")
 from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR, ReduceLROnPlateau
 from torch.amp import autocast, GradScaler
 import numpy as np
 from tqdm import tqdm
-from sklearn.manifold import TSNE
-import matplotlib.pyplot as plt
+
+TENSORBOARD_AVAILABLE = False
+SummaryWriter = None
+try:
+    from torch.utils.tensorboard import SummaryWriter
+    TENSORBOARD_AVAILABLE = True
+except Exception:
+    pass
+
+TSNE_AVAILABLE = False
+TSNE = None
+try:
+    from sklearn.manifold import TSNE
+    TSNE_AVAILABLE = True
+except Exception:
+    pass
+
+PLT_AVAILABLE = False
+plt = None
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    PLT_AVAILABLE = True
+except Exception:
+    pass
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from models.arcface.arcface_model import ArcFaceModel, freeze_layers, load_pretrained_backbone
@@ -447,6 +469,10 @@ class ArcFaceTrainer:
     
     def visualize_embeddings(self, embeddings, labels, save_path):
         """Visualize embeddings voi t-SNE"""
+        if not TSNE_AVAILABLE or not PLT_AVAILABLE:
+            print("Skipping t-SNE visualization (sklearn/matplotlib not available)")
+            return
+        
         print("Tao t-SNE visualization...")
         
         max_samples = self.config['logging']['embedding_vis']['num_samples']
