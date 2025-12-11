@@ -1,7 +1,7 @@
 """
 ArcFace DataLoader
 Xu ly tai du lieu va augmentation cho training/validation
-Ho tro nhieu format metadata CSV
+Ho tro nhieu format: CSV metadata hoac folder-based (khong can metadata)
 """
 
 import os
@@ -9,8 +9,9 @@ import pandas as pd
 import numpy as np
 from PIL import Image
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
 from torchvision import transforms
+from collections import defaultdict
 
 try:
     import albumentations as A
@@ -18,6 +19,129 @@ try:
     HAS_ALBUMENTATIONS = True
 except ImportError:
     HAS_ALBUMENTATIONS = False
+
+
+class FolderBasedDataset(Dataset):
+    """
+    Dataset dua tren cau truc thu muc - KHONG CAN FILE METADATA
+    
+    Cau truc thu muc:
+        data_root/
+            identity_1/
+                img1.jpg
+                img2.jpg
+            identity_2/
+                img1.jpg
+                ...
+    """
+    def __init__(self, data_root, transform=None, use_albumentations=False,
+                 min_images_per_identity=5, extensions=('.jpg', '.jpeg', '.png')):
+        """
+        Args:
+            data_root: Thu muc goc chua cac folder identity
+            transform: Transforms de ap dung
+            use_albumentations: Su dung albumentations thay vi torchvision
+            min_images_per_identity: Loc bo identity co it hon X anh
+            extensions: Cac dinh dang file anh ho tro
+        """
+        self.data_root = data_root
+        self.transform = transform
+        self.use_albumentations = use_albumentations
+        self.extensions = extensions
+        
+        # Scan thu muc va tao mapping
+        self.samples = []  # List of (image_path, label)
+        self.identity_to_label = {}
+        self.label_to_identity = {}
+        self.class_counts = {}  # So anh moi class
+        
+        self._scan_folder(min_images_per_identity)
+        
+        self.num_classes = len(self.identity_to_label)
+        print(f"Loaded {len(self.samples)} images from {self.num_classes} identities")
+        print(f"Min images/identity filter: {min_images_per_identity}")
+    
+    def _scan_folder(self, min_images):
+        """Scan thu muc de tao danh sach samples"""
+        identity_images = defaultdict(list)
+        
+        # Scan tat ca cac folder
+        for identity_name in os.listdir(self.data_root):
+            identity_path = os.path.join(self.data_root, identity_name)
+            if not os.path.isdir(identity_path):
+                continue
+            
+            # Scan tat ca anh trong folder
+            for img_name in os.listdir(identity_path):
+                if img_name.lower().endswith(self.extensions):
+                    img_path = os.path.join(identity_path, img_name)
+                    identity_images[identity_name].append(img_path)
+        
+        # Loc identity co du anh va tao mapping
+        label = 0
+        for identity_name, images in sorted(identity_images.items()):
+            if len(images) >= min_images:
+                self.identity_to_label[identity_name] = label
+                self.label_to_identity[label] = identity_name
+                self.class_counts[label] = len(images)
+                
+                for img_path in images:
+                    self.samples.append((img_path, label))
+                
+                label += 1
+        
+        # In thong ke
+        filtered_count = len(identity_images) - len(self.identity_to_label)
+        if filtered_count > 0:
+            print(f"Filtered out {filtered_count} identities with < {min_images} images")
+    
+    def __len__(self):
+        return len(self.samples)
+    
+    def __getitem__(self, idx):
+        image_path, label = self.samples[idx]
+        
+        try:
+            image = Image.open(image_path).convert('RGB')
+            
+            if self.transform:
+                if self.use_albumentations:
+                    image = np.array(image)
+                    augmented = self.transform(image=image)
+                    image = augmented['image']
+                else:
+                    image = self.transform(image)
+            else:
+                image = transforms.ToTensor()(image)
+            
+            return image, label, image_path
+            
+        except Exception as e:
+            print(f"Error loading {image_path}: {e}")
+            dummy_image = torch.zeros(3, 112, 112)
+            return dummy_image, label, image_path
+    
+    def get_identity_name(self, label):
+        return self.label_to_identity.get(label, f"ID_{label}")
+    
+    def get_sample_weights(self):
+        """Tinh trong so cho moi sample de class-balanced sampling"""
+        # Trong so = 1 / so_anh_cua_class
+        weights = []
+        for _, label in self.samples:
+            weights.append(1.0 / self.class_counts[label])
+        return weights
+    
+    def get_class_weights(self):
+        """Tinh trong so cho loss function (inverse frequency)"""
+        total_samples = len(self.samples)
+        weights = []
+        for label in range(self.num_classes):
+            count = self.class_counts[label]
+            # Inverse frequency weighting
+            weight = total_samples / (self.num_classes * count)
+            weights.append(weight)
+        return torch.FloatTensor(weights)
 
 
 class ArcFaceDataset(Dataset):
@@ -176,41 +300,129 @@ class ArcFaceDataset(Dataset):
         return self.label_to_identity.get(label, f"ID_{label}")
 
 
-def get_train_transforms(image_size=112, use_albumentations=False):
-    """Transforms cho training set (co augmentation)"""
+def get_train_transforms(image_size=112, use_albumentations=False, augment_strength='normal'):
+    """
+    Transforms cho training set (co augmentation)
+    
+    Args:
+        image_size: Kich thuoc anh dau ra
+        use_albumentations: Su dung albumentations
+        augment_strength: 'light', 'normal', hoac 'strong'
+    """
     if use_albumentations and HAS_ALBUMENTATIONS:
-        return A.Compose([
-            A.Resize(image_size, image_size),
-            A.HorizontalFlip(p=0.5),
-            A.Rotate(limit=10, p=0.5),
-            A.ColorJitter(
-                brightness=0.2,
-                contrast=0.2,
-                saturation=0.1,
-                hue=0.05,
-                p=0.5
-            ),
-            A.OneOf([
-                A.GaussNoise(var_limit=(10.0, 50.0), p=1.0),
-                A.GaussianBlur(blur_limit=(3, 5), p=1.0),
-            ], p=0.3),
-            A.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-            ToTensorV2()
-        ])
+        if augment_strength == 'strong':
+            return A.Compose([
+                A.Resize(image_size, image_size),
+                A.HorizontalFlip(p=0.5),
+                A.Rotate(limit=15, p=0.5),
+                A.Affine(
+                    scale=(0.9, 1.1),
+                    translate_percent=(-0.1, 0.1),
+                    shear=(-5, 5),
+                    p=0.5
+                ),
+                A.ColorJitter(
+                    brightness=0.3,
+                    contrast=0.3,
+                    saturation=0.2,
+                    hue=0.1,
+                    p=0.7
+                ),
+                A.OneOf([
+                    A.GaussNoise(var_limit=(10.0, 80.0), p=1.0),
+                    A.GaussianBlur(blur_limit=(3, 7), p=1.0),
+                    A.MotionBlur(blur_limit=(3, 7), p=1.0),
+                ], p=0.4),
+                A.OneOf([
+                    A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=1.0),
+                    A.CLAHE(clip_limit=2.0, p=1.0),
+                    A.Equalize(p=1.0),
+                ], p=0.3),
+                A.CoarseDropout(
+                    max_holes=4,
+                    max_height=int(image_size * 0.15),
+                    max_width=int(image_size * 0.15),
+                    min_holes=1,
+                    fill_value=0,
+                    p=0.3
+                ),
+                A.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+                ToTensorV2()
+            ])
+        elif augment_strength == 'light':
+            return A.Compose([
+                A.Resize(image_size, image_size),
+                A.HorizontalFlip(p=0.5),
+                A.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.05, hue=0.02, p=0.3),
+                A.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+                ToTensorV2()
+            ])
+        else:  # normal
+            return A.Compose([
+                A.Resize(image_size, image_size),
+                A.HorizontalFlip(p=0.5),
+                A.Rotate(limit=10, p=0.5),
+                A.ColorJitter(
+                    brightness=0.2,
+                    contrast=0.2,
+                    saturation=0.1,
+                    hue=0.05,
+                    p=0.5
+                ),
+                A.OneOf([
+                    A.GaussNoise(var_limit=(10.0, 50.0), p=1.0),
+                    A.GaussianBlur(blur_limit=(3, 5), p=1.0),
+                ], p=0.3),
+                A.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+                ToTensorV2()
+            ])
     else:
-        return transforms.Compose([
-            transforms.Resize((image_size, image_size)),
-            transforms.RandomHorizontalFlip(p=0.5),
-            transforms.RandomRotation(degrees=10),
-            transforms.ColorJitter(
-                brightness=0.2,
-                contrast=0.2,
-                saturation=0.1,
-                hue=0.05
-            ),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-        ])
+        # Torchvision transforms
+        if augment_strength == 'strong':
+            return transforms.Compose([
+                transforms.Resize((image_size, image_size)),
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandomRotation(degrees=15),
+                transforms.RandomAffine(
+                    degrees=0,
+                    translate=(0.1, 0.1),
+                    scale=(0.9, 1.1),
+                    shear=5
+                ),
+                transforms.ColorJitter(
+                    brightness=0.3,
+                    contrast=0.3,
+                    saturation=0.2,
+                    hue=0.1
+                ),
+                transforms.RandomGrayscale(p=0.1),
+                transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0)),
+                transforms.RandomErasing(p=0.3, scale=(0.02, 0.15), ratio=(0.3, 3.3)),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+            ])
+        elif augment_strength == 'light':
+            return transforms.Compose([
+                transforms.Resize((image_size, image_size)),
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.05, hue=0.02),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+            ])
+        else:  # normal
+            return transforms.Compose([
+                transforms.Resize((image_size, image_size)),
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandomRotation(degrees=10),
+                transforms.ColorJitter(
+                    brightness=0.2,
+                    contrast=0.2,
+                    saturation=0.1,
+                    hue=0.05
+                ),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+            ])
 
 
 def get_val_transforms(image_size=112, use_albumentations=False):
@@ -233,7 +445,7 @@ def create_dataloaders(train_csv, val_csv, batch_size=64, num_workers=4,
                       image_size=112, use_albumentations=False,
                       train_data_root=None, val_data_root=None):
     """
-    Tao DataLoaders cho training va validation
+    Tao DataLoaders cho training va validation (tu CSV metadata)
     
     Args:
         train_csv: Duong dan den train metadata CSV
@@ -294,6 +506,115 @@ def create_dataloaders(train_csv, val_csv, batch_size=64, num_workers=4,
     print(f"Batch size: {batch_size}")
     
     return train_loader, val_loader, num_classes
+
+
+def create_folder_dataloaders(train_root, val_root, batch_size=64, num_workers=4,
+                              image_size=112, use_albumentations=False,
+                              min_images_per_identity=5,
+                              class_balanced_sampling=True,
+                              augment_strength='normal'):
+    """
+    Tao DataLoaders tu cau truc thu muc - KHONG CAN FILE METADATA
+    
+    Cau truc thu muc:
+        train_root/
+            identity_1/
+                img1.jpg
+                img2.jpg
+            identity_2/
+                img1.jpg
+                ...
+    
+    Args:
+        train_root: Thu muc chua anh train (co cac folder identity)
+        val_root: Thu muc chua anh val
+        batch_size: Batch size
+        num_workers: So workers cho parallel data loading
+        image_size: Kich thuoc anh (default 112 cho ArcFace)
+        use_albumentations: Su dung albumentations
+        min_images_per_identity: Loc bo identity co it hon X anh
+        class_balanced_sampling: Su dung weighted sampling de can bang class
+        augment_strength: 'light', 'normal', 'strong' - muc do augmentation
+    
+    Returns:
+        train_loader, val_loader, num_classes, class_weights
+    """
+    train_transform = get_train_transforms(image_size, use_albumentations, augment_strength)
+    val_transform = get_val_transforms(image_size, use_albumentations)
+    
+    print("\n=== Creating Train Dataset (Folder-based) ===")
+    train_dataset = FolderBasedDataset(
+        data_root=train_root,
+        transform=train_transform,
+        use_albumentations=use_albumentations,
+        min_images_per_identity=min_images_per_identity
+    )
+    
+    print("\n=== Creating Val Dataset (Folder-based) ===")
+    val_dataset = FolderBasedDataset(
+        data_root=val_root,
+        transform=val_transform,
+        use_albumentations=use_albumentations,
+        min_images_per_identity=1  # Val khong loc
+    )
+    
+    # Class-balanced sampling cho training
+    if class_balanced_sampling:
+        print("\n=== Using Class-Balanced Sampling ===")
+        sample_weights = train_dataset.get_sample_weights()
+        sampler = WeightedRandomSampler(
+            weights=sample_weights,
+            num_samples=len(train_dataset),
+            replacement=True
+        )
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            sampler=sampler,  # Su dung sampler thay vi shuffle
+            num_workers=num_workers,
+            pin_memory=True,
+            drop_last=True
+        )
+        print(f"Sample weights range: [{min(sample_weights):.6f}, {max(sample_weights):.6f}]")
+    else:
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+            pin_memory=True,
+            drop_last=True
+        )
+    
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+        drop_last=False
+    )
+    
+    num_classes = train_dataset.num_classes
+    class_weights = train_dataset.get_class_weights()
+    
+    print(f"\n=== DataLoader Summary ===")
+    print(f"Train: {len(train_dataset)} images, {len(train_loader)} batches")
+    print(f"Val: {len(val_dataset)} images, {len(val_loader)} batches")
+    print(f"Num classes: {num_classes}")
+    print(f"Batch size: {batch_size}")
+    print(f"Augmentation: {augment_strength}")
+    print(f"Class-balanced: {class_balanced_sampling}")
+    
+    # In thong ke class distribution
+    counts = list(train_dataset.class_counts.values())
+    print(f"\nClass distribution:")
+    print(f"  Min images/class: {min(counts)}")
+    print(f"  Max images/class: {max(counts)}")
+    print(f"  Mean images/class: {np.mean(counts):.1f}")
+    print(f"  Median images/class: {np.median(counts):.1f}")
+    
+    return train_loader, val_loader, num_classes, class_weights
 
 
 def visualize_batch(dataloader, num_images=16, save_path=None):
@@ -414,5 +735,62 @@ def test_with_celeba_data():
     print("\nTest completed!")
 
 
+def test_folder_based():
+    """Test Folder-based DataLoader - KHONG CAN METADATA"""
+    print("="*60)
+    print("TEST FOLDER-BASED DATALOADER (NO METADATA REQUIRED)")
+    print("="*60)
+    
+    # Gia su cau truc thu muc:
+    # data/celeba_by_id/train/
+    #     1/
+    #         000001.jpg
+    #         000002.jpg
+    #     2/
+    #         000003.jpg
+    #     ...
+    
+    train_root = "data/celeba_by_id/train"
+    val_root = "data/celeba_by_id/val"
+    
+    # Check directories
+    for name, path in [("Train dir", train_root), ("Val dir", val_root)]:
+        if os.path.exists(path):
+            print(f"[OK] {name}: {path}")
+        else:
+            print(f"[MISSING] {name}: {path}")
+            print("Hay chay notebook data_preprocessing.ipynb de tao du lieu")
+            return
+    
+    # Tao dataloader voi class-balanced sampling va strong augmentation
+    train_loader, val_loader, num_classes, class_weights = create_folder_dataloaders(
+        train_root=train_root,
+        val_root=val_root,
+        batch_size=32,
+        num_workers=0,
+        image_size=112,
+        use_albumentations=HAS_ALBUMENTATIONS,
+        min_images_per_identity=5,
+        class_balanced_sampling=True,
+        augment_strength='strong'
+    )
+    
+    # Test loading
+    print("\n=== Test Loading ===")
+    images, labels, paths = next(iter(train_loader))
+    print(f"Batch shape: {images.shape}")
+    print(f"Labels: {labels[:10].tolist()}")
+    
+    # Kiem tra class weights
+    print(f"\nClass weights shape: {class_weights.shape}")
+    print(f"Class weights range: [{class_weights.min():.4f}, {class_weights.max():.4f}]")
+    
+    print("\nTest completed!")
+
+
 if __name__ == "__main__":
-    test_with_celeba_data()
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == 'folder':
+        test_folder_based()
+    else:
+        test_with_celeba_data()

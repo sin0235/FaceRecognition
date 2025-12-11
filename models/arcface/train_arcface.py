@@ -17,11 +17,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR, ReduceLROnPlateau
-<<<<<<< HEAD
-from torch.cuda.amp import autocast, GradScaler
-=======
 from torch.amp import autocast, GradScaler
->>>>>>> a10b4250691c6ef0bbc40ff67c8d2b951775aabf
 import numpy as np
 from tqdm import tqdm
 from sklearn.manifold import TSNE

@@ -1,7 +1,7 @@
 ---
 applyTo: '**'
 ---
-1. Luôn phản hồi bằng tiếng việt
+1. Luôn phản hồi bằng tiếng việt có dấu
 2. Chỉ comment khi cần thiết, ở các logic phức tạp liên quan đến việc tính toán và thực thi nhiều bước, không comment ở các đoạn mã cơ bản.
 3. luôn tham khảo cấu trúc cơ sở dữ liệu ở file database_setup.sql. Hạn chế điều chỉnh cơ sở dữ liệu, nếu có phải hỏi  trước
 4. luôn tham khảo cấu trúc cơ sở dữ liệu ở file database_setup.sql. Hạn chế điều chỉnh cơ sở dữ liệu, nếu có phải hỏi  trước

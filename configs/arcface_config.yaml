@@ -24,22 +24,12 @@ training:
   warmup:
     enabled: true
     epochs: 5           # So epochs warmup
-    start_lr: 0.0004    # LR bat dau (tang theo batch size)
-  
-  # Warmup (quan trong cho ArcFace voi nhieu classes)
-  warmup:
-    enabled: true
-    epochs: 5           # So epochs warmup
     start_lr: 0.0001    # LR bat dau
   
   # Optimizer: sgd, adam, adamw
   optimizer:
     type: sgd
-<<<<<<< HEAD
-    lr: 0.001           # Giam tu 0.01 xuong 0.001
-=======
-    lr: 0.004           # Tang theo linear scaling (batch 256/64 = 4x)
->>>>>>> a10b4250691c6ef0bbc40ff67c8d2b951775aabf
+    lr: 0.001           # LR co ban
     momentum: 0.9
     weight_decay: 0.0005
   
@@ -71,16 +61,28 @@ training:
 
 # Data Configuration
 data:
-  # Paths (local)
-  train_csv: data/CelebA_Aligned/metadata/train_labels_filtered.csv
-  val_csv: data/CelebA_Aligned/metadata/val_labels_filtered.csv
-  train_data_root: data/CelebA_Aligned/train
-  val_data_root: data/CelebA_Aligned/val
+  # Mode: 'csv' (can file metadata) hoac 'folder' (khong can metadata)
+  mode: folder
+  
+  # Paths cho mode 'csv'
+  train_csv: data/CelebA_Aligned_Balanced/metadata/train_labels.csv
+  val_csv: data/CelebA_Aligned_Balanced/metadata/val_labels.csv
+  
+  # Paths cho ca 2 mode
+  train_data_root: data/CelebA_Aligned_Balanced/train
+  val_data_root: data/CelebA_Aligned_Balanced/val
+  
+  # Filtering (chi ap dung cho mode 'folder')
+  min_images_per_identity: 5
+  
+  # Class balancing
+  class_balanced_sampling: true
+  augment_strength: normal  # light, normal, strong
   
   # Image settings
   image_size: 112
   
-  # Augmentation
+  # Augmentation (cho online augmentation khi training)
   augmentation:
     horizontal_flip: 0.5
     rotation_degrees: 10
