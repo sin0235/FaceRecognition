@@ -399,12 +399,18 @@ class CelebAPreprocessor:
                         stats[split] += len([f for f in os.listdir(dst_dir) if f.endswith('.jpg')])
                         identity_stats[split].add(pid)
         
-        # In ket qua
+        # In ket qua (bao ve chia 0)
         total = sum(stats.values())
-        for split in ['train', 'val', 'test']:
-            n_imgs = stats[split]
-            n_ids = len(identity_stats[split])
-            print(f"  {split:5}: {n_imgs:,} anh ({100*n_imgs/total:.1f}%), {n_ids} identities")
+        if total == 0:
+            print("  [WARNING] Khong co anh nao duoc copy vao cac split.")
+            for split in ['train', 'val', 'test']:
+                print(f"  {split:5}: 0 anh (0.0%), 0 identities")
+        else:
+            for split in ['train', 'val', 'test']:
+                n_imgs = stats[split]
+                n_ids = len(identity_stats[split])
+                pct = 100 * n_imgs / total if total > 0 else 0.0
+                print(f"  {split:5}: {n_imgs:,} anh ({pct:.1f}%), {n_ids} identities")
         
         # Kiem tra overlap
         if self.split_method == 'by_image':
@@ -496,7 +502,8 @@ class CelebAPreprocessor:
                             "is_augmented": 1 if '_aug' in img_path.name else 0
                         })
             
-            df = pd.DataFrame(records)
+            # Neu khong co anh, van luu file rong voi headers de tranh loi read_csv
+            df = pd.DataFrame(records, columns=["image", "identity_id", "label", "is_augmented"])
             df.to_csv(meta_dir / f"{split}_labels.csv", index=False)
             
             n_ids = df['identity_id'].nunique()
@@ -524,12 +531,28 @@ class CelebAPreprocessor:
         }
         
         for split in ["train", "val", "test"]:
-            df = pd.read_csv(meta_dir / f"{split}_labels.csv")
-            config["splits"][split] = {
-                "num_identities": int(df['identity_id'].nunique()),
-                "num_images": int(len(df)),
-                "num_augmented": int(df['is_augmented'].sum())
-            }
+            csv_path = meta_dir / f"{split}_labels.csv"
+            if not csv_path.exists():
+                config["splits"][split] = {
+                    "num_identities": 0,
+                    "num_images": 0,
+                    "num_augmented": 0
+                }
+                continue
+
+            df = pd.read_csv(csv_path)
+            if df.empty:
+                config["splits"][split] = {
+                    "num_identities": 0,
+                    "num_images": 0,
+                    "num_augmented": 0
+                }
+            else:
+                config["splits"][split] = {
+                    "num_identities": int(df['identity_id'].nunique()),
+                    "num_images": int(len(df)),
+                    "num_augmented": int(df['is_augmented'].sum())
+                }
         
         with open(meta_dir / "dataset_config.json", "w") as f:
             json.dump(config, f, indent=2)
