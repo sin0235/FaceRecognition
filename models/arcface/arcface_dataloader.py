@@ -307,10 +307,66 @@ def get_train_transforms(image_size=112, use_albumentations=False, augment_stren
     Args:
         image_size: Kich thuoc anh dau ra
         use_albumentations: Su dung albumentations
-        augment_strength: 'light', 'normal', hoac 'strong'
+        augment_strength: 'light', 'normal', 'strong', hoac 'heavy'
     """
     if use_albumentations and HAS_ALBUMENTATIONS:
-        if augment_strength == 'strong':
+        if augment_strength == 'heavy':
+            # HEAVY: Augmentation manh nhat cho dataset it anh/class
+            return A.Compose([
+                A.RandomResizedCrop(height=image_size, width=image_size, scale=(0.85, 1.0), ratio=(0.95, 1.05), p=0.5),
+                A.Resize(image_size, image_size),
+                A.HorizontalFlip(p=0.5),
+                A.Rotate(limit=20, p=0.6, border_mode=0),
+                A.Affine(
+                    scale=(0.85, 1.15),
+                    translate_percent=(-0.1, 0.1),
+                    shear=(-8, 8),
+                    rotate=(-15, 15),
+                    p=0.6
+                ),
+                A.Perspective(scale=(0.02, 0.05), p=0.3),
+                A.ColorJitter(
+                    brightness=0.4,
+                    contrast=0.4,
+                    saturation=0.3,
+                    hue=0.1,
+                    p=0.8
+                ),
+                A.OneOf([
+                    A.GaussNoise(var_limit=(10.0, 100.0), p=1.0),
+                    A.ISONoise(color_shift=(0.01, 0.05), intensity=(0.1, 0.5), p=1.0),
+                    A.MultiplicativeNoise(multiplier=(0.9, 1.1), p=1.0),
+                ], p=0.5),
+                A.OneOf([
+                    A.GaussianBlur(blur_limit=(3, 7), p=1.0),
+                    A.MotionBlur(blur_limit=(3, 9), p=1.0),
+                    A.MedianBlur(blur_limit=5, p=1.0),
+                    A.Defocus(radius=(2, 4), p=1.0),
+                ], p=0.4),
+                A.OneOf([
+                    A.RandomBrightnessContrast(brightness_limit=0.3, contrast_limit=0.3, p=1.0),
+                    A.CLAHE(clip_limit=4.0, tile_grid_size=(8, 8), p=1.0),
+                    A.Equalize(p=1.0),
+                    A.RandomGamma(gamma_limit=(80, 120), p=1.0),
+                ], p=0.5),
+                A.OneOf([
+                    A.RGBShift(r_shift_limit=20, g_shift_limit=20, b_shift_limit=20, p=1.0),
+                    A.HueSaturationValue(hue_shift_limit=20, sat_shift_limit=30, val_shift_limit=20, p=1.0),
+                    A.ChannelShuffle(p=1.0),
+                ], p=0.3),
+                A.RandomShadow(shadow_roi=(0, 0.5, 1, 1), num_shadows_limit=(1, 2), shadow_dimension=5, p=0.2),
+                A.CoarseDropout(
+                    max_holes=6,
+                    max_height=int(image_size * 0.2),
+                    max_width=int(image_size * 0.2),
+                    min_holes=2,
+                    fill_value=0,
+                    p=0.4
+                ),
+                A.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+                ToTensorV2()
+            ])
+        elif augment_strength == 'strong':
             return A.Compose([
                 A.Resize(image_size, image_size),
                 A.HorizontalFlip(p=0.5),
@@ -378,7 +434,32 @@ def get_train_transforms(image_size=112, use_albumentations=False, augment_stren
             ])
     else:
         # Torchvision transforms
-        if augment_strength == 'strong':
+        if augment_strength == 'heavy':
+            # HEAVY: Augmentation manh nhat voi torchvision
+            return transforms.Compose([
+                transforms.RandomResizedCrop(image_size, scale=(0.85, 1.0), ratio=(0.95, 1.05)),
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandomRotation(degrees=20),
+                transforms.RandomAffine(
+                    degrees=15,
+                    translate=(0.1, 0.1),
+                    scale=(0.85, 1.15),
+                    shear=8
+                ),
+                transforms.RandomPerspective(distortion_scale=0.2, p=0.3),
+                transforms.ColorJitter(
+                    brightness=0.4,
+                    contrast=0.4,
+                    saturation=0.3,
+                    hue=0.1
+                ),
+                transforms.RandomGrayscale(p=0.15),
+                transforms.GaussianBlur(kernel_size=5, sigma=(0.1, 3.0)),
+                transforms.RandomErasing(p=0.4, scale=(0.05, 0.2), ratio=(0.3, 3.3)),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+            ])
+        elif augment_strength == 'strong':
             return transforms.Compose([
                 transforms.Resize((image_size, image_size)),
                 transforms.RandomHorizontalFlip(p=0.5),
