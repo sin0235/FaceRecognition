@@ -7,75 +7,75 @@ model:
   backbone: resnet50
   embedding_size: 512
   pretrained: true
-  freeze_ratio: 0.0   # KHONG dong bang backbone de hoc tot hon
+  freeze_ratio: 0.5 # KHONG dong bang backbone de hoc tot hon
 
 # ArcFace Loss - QUAN TRONG: dieu chinh cho so luong classes
 arcface:
-  margin: 0.1         # Bat dau nho, tang dan khi model hoi tu
-  scale: 64.0         # Gia tri paper goc
-  easy_margin: true   # De hoi tu hon voi nhieu classes
+  margin: 0.1 # Bat dau nho, tang dan khi model hoi tu
+  scale: 64.0 # Gia tri paper goc
+  easy_margin: true # De hoi tu hon voi nhieu classes
 
 # Training Configuration
 training:
   num_epochs: 50
   batch_size: 128
   num_workers: 4
-  
+
   # Warmup (quan trong cho ArcFace voi nhieu classes)
   warmup:
     enabled: true
-    epochs: 5           # So epochs warmup
-    start_lr: 0.00001   # Bat dau rat thap
-  
+    epochs: 5 # So epochs warmup
+    start_lr: 0.00001 # Bat dau rat thap
+
   # Optimizer: sgd, adam, adamw
   optimizer:
     type: sgd
-    lr: 0.1             # LR cao theo paper ArcFace
+    lr: 0.1 # LR cao theo paper ArcFace
     momentum: 0.9
     weight_decay: 0.0005
-  
+
   # Learning Rate Scheduler
   scheduler:
-    type: step          # Step scheduler on dinh hon
-    step_size: 10       # Giam LR moi 10 epochs
-    gamma: 0.1          # Nhan LR voi 0.1
+    type: step # Step scheduler on dinh hon
+    step_size: 10 # Giam LR moi 10 epochs
+    gamma: 0.1 # Nhan LR voi 0.1
     eta_min: 0.00001
-  
+
   # Gradient Clipping
   grad_clip:
     enabled: true
     max_norm: 5.0
-  
+
   # Early Stopping - theo doi LOSS thay vi accuracy
   early_stopping:
     enabled: true
-    patience: 15        # Tang patience
+    patience: 15 # Tang patience
     min_delta: 0.001
-    mode: min           # Theo doi loss (min) thay vi accuracy (max)
+    mode: min # Theo doi loss (min) thay vi accuracy (max)
 
 # Data Configuration
 data:
   # Mode: 'csv' (can file metadata) hoac 'folder' (khong can metadata)
   mode: folder
-  
+
   # Paths cho mode 'csv'
   train_csv: data/CelebA_Aligned_Balanced/metadata/train_labels.csv
   val_csv: data/CelebA_Aligned_Balanced/metadata/val_labels.csv
-  
+
   # Paths cho ca 2 mode
   train_data_root: data/CelebA_Aligned_Balanced/train
   val_data_root: data/CelebA_Aligned_Balanced/val
-  
+
   # Filtering (chi ap dung cho mode 'folder')
   min_images_per_identity: 5
-  
+
   # Class balancing
   class_balanced_sampling: true
-  augment_strength: normal  # light, normal, strong
-  
+  augment_strength: strong # light, normal, strong
+
   # Image settings
   image_size: 112
-  
+
   # Augmentation (cho online augmentation khi training)
   augmentation:
     horizontal_flip: 0.5
@@ -85,7 +85,7 @@ data:
       contrast: 0.2
       saturation: 0.1
       hue: 0.05
-  
+
   # Normalization
   normalize:
     mean: [0.5, 0.5, 0.5]
@@ -95,15 +95,15 @@ data:
 checkpoint:
   save_dir: models/checkpoints/arcface
   save_best: true
-  save_interval: 1       # Luu moi epoch (quan trong cho Colab 12h limit)
-  keep_last_n: 3         # Chi giu 3 checkpoints gan nhat de tiet kiem dung luong
+  save_interval: 1 # Luu moi epoch (quan trong cho Colab 12h limit)
+  keep_last_n: 3 # Chi giu 3 checkpoints gan nhat de tiet kiem dung luong
 
 # Logging
 logging:
   use_tensorboard: true
   log_dir: logs/arcface
   log_interval: 100
-  
+
   embedding_vis:
     enabled: true
     interval: 5
@@ -114,5 +114,5 @@ device: cuda
 
 # Mixed Precision Training (FP16) - tang toc 2-3x tren GPU
 mixed_precision:
-  enabled: true         # Bat FP16 de tang toc training
-  opt_level: "O1"       # O1: mixed, O2: almost FP16
+  enabled: true # Bat FP16 de tang toc training
+  opt_level: "O1" # O1: mixed, O2: almost FP16

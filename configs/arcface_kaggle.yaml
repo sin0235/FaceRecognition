@@ -6,63 +6,63 @@ model:
   backbone: resnet50
   embedding_size: 512
   pretrained: true
-  freeze_ratio: 0.0       # KHONG dong bang - can train full backbone
+  freeze_ratio: 0.0 # KHONG dong bang - can train full backbone
 
 # ArcFace Loss - DIEU CHINH CHO NHIEU CLASSES
 arcface:
-  margin: 0.1             # Giam manh tu 0.35 - bat dau nho roi tang dan
-  scale: 64.0             # Tang tu 30 len 64 (gia tri paper goc)
-  easy_margin: true       # Bat easy_margin de de hoi tu hon
+  margin: 0.3 # Giam manh tu 0.35 - bat dau nho roi tang dan
+  scale: 48.0 # Tang tu 30 len 64 (gia tri paper goc)
+  easy_margin: true # Bat easy_margin de de hoi tu hon
 
 # Training Configuration - toi uu cho Kaggle
 training:
-  num_epochs: 50
-  batch_size: 128         # Tang len 128 neu GPU cho phep
-  num_workers: 4
-  
+  num_epochs: 75
+  batch_size: 128 # Tang len 128 neu GPU cho phep
+  num_workers: 8
+
   warmup:
     enabled: true
-    epochs: 5             # Tang warmup len 5 epochs
-    start_lr: 0.00001     # Bat dau thap hon
-  
+    epochs: 5 # Tang warmup len 5 epochs
+    start_lr: 0.00001 # Bat dau thap hon
+
   optimizer:
     type: sgd
-    lr: 0.1               # Tang LR len 0.1 (theo paper ArcFace)
+    lr: 0.1 # Tang LR len 0.1 (theo paper ArcFace)
     momentum: 0.9
-    weight_decay: 0.0005
-  
+    weight_decay: 0.001
+
   scheduler:
-    type: step            # Dung step thay vi cosine
-    step_size: 10         # Giam LR moi 10 epochs
+    type: step # Dung step thay vi cosine
+    step_size: 10 # Giam LR moi 10 epochs
     gamma: 0.1
     eta_min: 0.00001
-  
+
   grad_clip:
     enabled: true
     max_norm: 5.0
-  
+
   early_stopping:
     enabled: true
-    patience: 15          # Tang patience vi can nhieu epochs hon
-    min_delta: 0.0001     # Giam threshold
+    patience: 15 # Tang patience vi can nhieu epochs hon
+    min_delta: 0.0001 # Giam threshold
 
 # Data Configuration
 data:
-  mode: folder            # Khong can CSV metadata
-  
+  mode: folder # Khong can CSV metadata
+
   # Paths (se bi override boi --data_dir)
   train_data_root: data/train
   val_data_root: data/val
-  
+
   # CSV paths (chi dung khi mode: csv)
   train_csv: data/metadata/train_labels.csv
   val_csv: data/metadata/val_labels.csv
-  
+
   min_images_per_identity: 5
   class_balanced_sampling: true
   augment_strength: normal
   image_size: 112
-  
+
   normalize:
     mean: [0.5, 0.5, 0.5]
     std: [0.5, 0.5, 0.5]
@@ -72,16 +72,16 @@ checkpoint:
   save_dir: /kaggle/working/checkpoints/arcface
   save_best: true
   save_interval: 1
-  keep_last_n: 2          # Giam de tiet kiem dung luong
+  keep_last_n: 2 # Giam de tiet kiem dung luong
 
 # Logging
 logging:
-  use_tensorboard: false  # Tat TensorBoard tren Kaggle
+  use_tensorboard: false # Tat TensorBoard tren Kaggle
   log_dir: /kaggle/working/logs/arcface
   log_interval: 50
-  
+
   embedding_vis:
-    enabled: false        # Tat t-SNE de tiet kiem thoi gian
+    enabled: false # Tat t-SNE de tiet kiem thoi gian
 
 # Device
 device: cuda
