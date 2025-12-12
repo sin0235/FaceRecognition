@@ -30,15 +30,15 @@ training:
   # Optimizer: sgd, adam, adamw
   optimizer:
     type: sgd
-    lr: 0.1 # LR cao theo paper ArcFace
+    lr: 0.01 # LR cao theo paper ArcFace
     momentum: 0.9
     weight_decay: 0.0005
 
   # Learning Rate Scheduler
   scheduler:
     type: step # Step scheduler on dinh hon
-    step_size: 10 # Giam LR moi 10 epochs
-    gamma: 0.1 # Nhan LR voi 0.1
+    step_size: 15 # Giam LR moi 10 epochs
+    gamma: 0.5 # Nhan LR voi 0.1
     eta_min: 0.00001
 
   # Gradient Clipping
