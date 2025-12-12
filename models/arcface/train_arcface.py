@@ -15,6 +15,7 @@ from datetime import datetime
 import warnings
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
 warnings.filterwarnings('ignore')
 
 import torch
@@ -29,9 +30,15 @@ TENSORBOARD_AVAILABLE = False
 SummaryWriter = None
 try:
     from torch.utils.tensorboard import SummaryWriter
+    test_writer = SummaryWriter(log_dir='/tmp/test_tb', comment='test')
+    test_writer.close()
+    import shutil
+    shutil.rmtree('/tmp/test_tb', ignore_errors=True)
     TENSORBOARD_AVAILABLE = True
-except Exception:
-    pass
+    print("[INFO] TensorBoard available")
+except Exception as e:
+    print(f"[WARN] TensorBoard not available: {type(e).__name__}")
+    TENSORBOARD_AVAILABLE = False
 
 TSNE_AVAILABLE = False
 TSNE = None
