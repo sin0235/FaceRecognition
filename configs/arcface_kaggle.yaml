@@ -1,38 +1,40 @@
 # Config ArcFace Training cho Kaggle
-# Toi uu hoa cho GPU 16GB (P100/T4)
+# Toi uu hoa cho GPU 16GB (P100/T4) voi nhieu classes (9000+)
 
 # Model Architecture
 model:
   backbone: resnet50
   embedding_size: 512
   pretrained: true
-  freeze_ratio: 0.8
+  freeze_ratio: 0.0       # KHONG dong bang - can train full backbone
 
-# ArcFace Loss
+# ArcFace Loss - DIEU CHINH CHO NHIEU CLASSES
 arcface:
-  margin: 0.35
-  scale: 30.0
-  easy_margin: false
+  margin: 0.1             # Giam manh tu 0.35 - bat dau nho roi tang dan
+  scale: 64.0             # Tang tu 30 len 64 (gia tri paper goc)
+  easy_margin: true       # Bat easy_margin de de hoi tu hon
 
 # Training Configuration - toi uu cho Kaggle
 training:
-  num_epochs: 30
-  batch_size: 64          # Giam tu 256 de fit GPU 16GB
-  num_workers: 2          # Kaggle gioi han workers
+  num_epochs: 50
+  batch_size: 128         # Tang len 128 neu GPU cho phep
+  num_workers: 4
   
   warmup:
     enabled: true
-    epochs: 3
-    start_lr: 0.0001
+    epochs: 5             # Tang warmup len 5 epochs
+    start_lr: 0.00001     # Bat dau thap hon
   
   optimizer:
     type: sgd
-    lr: 0.01              # Tang LR vi batch_size nho hon
+    lr: 0.1               # Tang LR len 0.1 (theo paper ArcFace)
     momentum: 0.9
     weight_decay: 0.0005
   
   scheduler:
-    type: cosine
+    type: step            # Dung step thay vi cosine
+    step_size: 10         # Giam LR moi 10 epochs
+    gamma: 0.1
     eta_min: 0.00001
   
   grad_clip:
@@ -41,8 +43,8 @@ training:
   
   early_stopping:
     enabled: true
-    patience: 7
-    min_delta: 0.001
+    patience: 15          # Tang patience vi can nhieu epochs hon
+    min_delta: 0.0001     # Giam threshold
 
 # Data Configuration
 data:

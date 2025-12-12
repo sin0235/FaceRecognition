@@ -350,15 +350,20 @@ class ArcFaceTrainer:
         es_config = self.config['training']['early_stopping']
         
         if es_config['enabled']:
+            # mode: 'max' cho accuracy, 'min' cho loss
+            es_mode = es_config.get('mode', 'min')  # Mac dinh theo doi loss
             self.early_stopping = EarlyStopping(
                 patience=es_config['patience'],
                 min_delta=es_config.get('min_delta', 0.001),
-                mode='max',  # Theo doi accuracy
+                mode=es_mode,
                 verbose=True
             )
-            print(f"\nEarly Stopping: patience={es_config['patience']}, min_delta={es_config.get('min_delta', 0.001)}")
+            self.es_mode = es_mode
+            metric_name = 'loss' if es_mode == 'min' else 'accuracy'
+            print(f"\nEarly Stopping: patience={es_config['patience']}, min_delta={es_config.get('min_delta', 0.001)}, metric={metric_name}")
         else:
             self.early_stopping = None
+            self.es_mode = None
     
     def setup_logging(self):
         """Khoi tao TensorBoard logging"""
@@ -663,13 +668,15 @@ class ArcFaceTrainer:
             
             self.save_checkpoint(val_acc, val_loss, is_best)
             
-            # Early Stopping check
+            # Early Stopping check - dung metric phu hop (loss hoac accuracy)
             if self.early_stopping:
-                if self.early_stopping(val_acc, epoch):
+                es_metric = val_loss if self.es_mode == 'min' else val_acc
+                if self.early_stopping(es_metric, epoch):
                     print(f"\n{'='*60}")
                     print(f"EARLY STOPPING!")
                     print(f"Best epoch: {self.early_stopping.best_epoch + 1}")
                     print(f"Best val accuracy: {self.best_val_acc:.2f}%")
+                    print(f"Best val loss: {self.best_val_loss:.4f}")
                     print(f"{'='*60}")
                     break
         

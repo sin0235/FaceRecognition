@@ -1,63 +1,57 @@
 # Cau hinh ArcFace Training
 # Ho tro: Early Stopping + Learning Rate Scheduling
+# Toi uu cho nhieu classes (9000+)
 
 # Model Architecture
 model:
   backbone: resnet50
   embedding_size: 512
   pretrained: true
-  freeze_ratio: 0.8  # Dong bang 80% lop dau cua backbone
+  freeze_ratio: 0.0   # KHONG dong bang backbone de hoc tot hon
 
-# ArcFace Loss
+# ArcFace Loss - QUAN TRONG: dieu chinh cho so luong classes
 arcface:
-  margin: 0.35  # m parameter - giam tu 0.5 de de hoi tu hon voi nhieu classes
-  scale: 30.0   # s parameter - giam tu 64 de gradients on dinh hon
-  easy_margin: false
+  margin: 0.1         # Bat dau nho, tang dan khi model hoi tu
+  scale: 64.0         # Gia tri paper goc
+  easy_margin: true   # De hoi tu hon voi nhieu classes
 
 # Training Configuration
 training:
   num_epochs: 50
-  batch_size: 256
-  num_workers: 8
+  batch_size: 128
+  num_workers: 4
   
   # Warmup (quan trong cho ArcFace voi nhieu classes)
   warmup:
     enabled: true
     epochs: 5           # So epochs warmup
-    start_lr: 0.0001    # LR bat dau
+    start_lr: 0.00001   # Bat dau rat thap
   
   # Optimizer: sgd, adam, adamw
   optimizer:
     type: sgd
-    lr: 0.001           # LR co ban
+    lr: 0.1             # LR cao theo paper ArcFace
     momentum: 0.9
     weight_decay: 0.0005
   
   # Learning Rate Scheduler
-  # Options: step, cosine, plateau
   scheduler:
-    type: cosine        # Cosine tot hon cho ArcFace
-    # StepLR params
-    step_size: 10       # Giam LR moi step_size epochs
-    gamma: 0.1          # Nhan LR voi gamma
-    # CosineAnnealingLR params
-    eta_min: 0.00001    # LR toi thieu
-    # ReduceLROnPlateau params (type: plateau)
-    # mode: min       # min cho loss, max cho accuracy
-    # factor: 0.1     # Nhan LR voi factor khi khong cai thien
-    # patience: 5     # So epochs cho phep khong cai thien truoc khi giam LR
-    # min_lr: 0.0000001
+    type: step          # Step scheduler on dinh hon
+    step_size: 10       # Giam LR moi 10 epochs
+    gamma: 0.1          # Nhan LR voi 0.1
+    eta_min: 0.00001
   
   # Gradient Clipping
   grad_clip:
     enabled: true
     max_norm: 5.0
   
-  # Early Stopping
+  # Early Stopping - theo doi LOSS thay vi accuracy
   early_stopping:
     enabled: true
-    patience: 10      # Dung sau patience epochs khong cai thien
-    min_delta: 0.001  # Nguong toi thieu de coi la "cai thien"
+    patience: 15        # Tang patience
+    min_delta: 0.001
+    mode: min           # Theo doi loss (min) thay vi accuracy (max)
 
 # Data Configuration
 data:
