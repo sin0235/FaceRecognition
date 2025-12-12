@@ -53,7 +53,7 @@ except Exception:
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from models.arcface.arcface_model import ArcFaceModel, freeze_layers, load_pretrained_backbone
-from models.arcface.arcface_dataloader import create_dataloaders, visualize_batch, benchmark_dataloader
+from models.arcface.arcface_dataloader import create_dataloaders, create_folder_dataloaders, visualize_batch, benchmark_dataloader
 
 
 class EarlyStopping:
@@ -134,12 +134,25 @@ class ArcFaceTrainer:
         
         print(f"Su dung device: {self.device}")
         
-        # Override config neu co
+        # Override config neu co data_dir
         if data_dir:
-            self.config['data']['train_csv'] = os.path.join(data_dir, 'CelebA_Aligned_Balanced', 'metadata', 'train_labels.csv')
-            self.config['data']['val_csv'] = os.path.join(data_dir, 'CelebA_Aligned_Balanced', 'metadata', 'val_labels.csv')
-            self.config['data']['train_data_root'] = os.path.join(data_dir, 'CelebA_Aligned_Balanced', 'train')
-            self.config['data']['val_data_root'] = os.path.join(data_dir, 'CelebA_Aligned_Balanced', 'val')
+            # Kiem tra cau truc thu muc de tu dong detect
+            # Truong hop 1: data_dir chua truc tiep train/, val/, metadata/
+            # Truong hop 2: data_dir chua CelebA_Aligned_Balanced/train/, ...
+            if os.path.exists(os.path.join(data_dir, 'train')):
+                base_dir = data_dir
+            elif os.path.exists(os.path.join(data_dir, 'CelebA_Aligned_Balanced', 'train')):
+                base_dir = os.path.join(data_dir, 'CelebA_Aligned_Balanced')
+            else:
+                base_dir = data_dir
+                print(f"[WARN] Khong tim thay thu muc 'train' trong {data_dir}")
+            
+            self.config['data']['train_csv'] = os.path.join(base_dir, 'metadata', 'train_labels.csv')
+            self.config['data']['val_csv'] = os.path.join(base_dir, 'metadata', 'val_labels.csv')
+            self.config['data']['train_data_root'] = os.path.join(base_dir, 'train')
+            self.config['data']['val_data_root'] = os.path.join(base_dir, 'val')
+            
+            print(f"Data directory: {base_dir}")
         
         if checkpoint_dir:
             self.config['checkpoint']['save_dir'] = checkpoint_dir
@@ -177,28 +190,50 @@ class ArcFaceTrainer:
         print(f"Log dir: {self.log_dir}")
     
     def setup_data(self):
-        """Khoi tao DataLoaders"""
+        """Khoi tao DataLoaders - ho tro ca mode 'csv' va 'folder'"""
         print("\n=== Setup Data ===")
         
-        train_csv = self.config['data']['train_csv']
-        val_csv = self.config['data']['val_csv']
         batch_size = self.config['training']['batch_size']
         num_workers = self.config['training']['num_workers']
         image_size = self.config['data']['image_size']
+        data_mode = self.config['data'].get('mode', 'csv')
         
         train_data_root = self.config['data'].get('train_data_root', None)
         val_data_root = self.config['data'].get('val_data_root', None)
         
-        self.train_loader, self.val_loader, self.num_classes = create_dataloaders(
-            train_csv=train_csv,
-            val_csv=val_csv,
-            batch_size=batch_size,
-            num_workers=num_workers,
-            image_size=image_size,
-            use_albumentations=False,
-            train_data_root=train_data_root,
-            val_data_root=val_data_root
-        )
+        print(f"Data mode: {data_mode}")
+        
+        if data_mode == 'folder':
+            min_images = self.config['data'].get('min_images_per_identity', 5)
+            class_balanced = self.config['data'].get('class_balanced_sampling', True)
+            augment_strength = self.config['data'].get('augment_strength', 'normal')
+            
+            self.train_loader, self.val_loader, self.num_classes, self.class_weights = create_folder_dataloaders(
+                train_root=train_data_root,
+                val_root=val_data_root,
+                batch_size=batch_size,
+                num_workers=num_workers,
+                image_size=image_size,
+                use_albumentations=False,
+                min_images_per_identity=min_images,
+                class_balanced_sampling=class_balanced,
+                augment_strength=augment_strength
+            )
+        else:
+            train_csv = self.config['data']['train_csv']
+            val_csv = self.config['data']['val_csv']
+            
+            self.train_loader, self.val_loader, self.num_classes = create_dataloaders(
+                train_csv=train_csv,
+                val_csv=val_csv,
+                batch_size=batch_size,
+                num_workers=num_workers,
+                image_size=image_size,
+                use_albumentations=False,
+                train_data_root=train_data_root,
+                val_data_root=val_data_root
+            )
+            self.class_weights = None
         
         print(f"So classes: {self.num_classes}")
     
