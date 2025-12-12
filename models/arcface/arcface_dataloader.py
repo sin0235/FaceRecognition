@@ -455,9 +455,9 @@ def get_train_transforms(image_size=112, use_albumentations=False, augment_stren
                 ),
                 transforms.RandomGrayscale(p=0.15),
                 transforms.GaussianBlur(kernel_size=5, sigma=(0.1, 3.0)),
-                transforms.RandomErasing(p=0.4, scale=(0.05, 0.2), ratio=(0.3, 3.3)),
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+                transforms.RandomErasing(p=0.4, scale=(0.05, 0.2), ratio=(0.3, 3.3))
             ])
         elif augment_strength == 'strong':
             return transforms.Compose([
@@ -478,9 +478,9 @@ def get_train_transforms(image_size=112, use_albumentations=False, augment_stren
                 ),
                 transforms.RandomGrayscale(p=0.1),
                 transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0)),
-                transforms.RandomErasing(p=0.3, scale=(0.02, 0.15), ratio=(0.3, 3.3)),
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+                transforms.RandomErasing(p=0.3, scale=(0.02, 0.15), ratio=(0.3, 3.3))
             ])
         elif augment_strength == 'light':
             return transforms.Compose([
