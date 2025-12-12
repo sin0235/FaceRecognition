@@ -178,6 +178,16 @@ class ArcFaceTrainer:
         self.best_val_acc = 0.0
         self.best_val_loss = float('inf')
         self.global_step = 0
+        
+        # Training history for plotting
+        self.history = {
+            'train_loss': [],
+            'train_acc': [],
+            'val_loss': [],
+            'val_acc': [],
+            'learning_rate': [],
+            'epoch': []
+        }
     
     def load_config(self, config_path):
         """Load config tu YAML file"""
@@ -562,7 +572,8 @@ class ArcFaceTrainer:
             'warmup_enabled': getattr(self, 'warmup_enabled', False),
             'warmup_epochs': getattr(self, 'warmup_epochs', 0),
             'target_lr': getattr(self, 'target_lr', self.config['training']['optimizer']['lr']),
-            'use_amp': self.use_amp
+            'use_amp': self.use_amp,
+            'history': self.history
         }
         
         if is_best:
@@ -597,6 +608,30 @@ class ArcFaceTrainer:
         for old_ckpt in checkpoint_files[keep_last_n:]:
             old_ckpt.unlink()
             print(f"Removed old checkpoint: {old_ckpt.name}")
+    
+    def save_training_history(self):
+        """Luu training history ra file JSON de download va phan tich"""
+        import json
+        
+        history_path = self.checkpoint_dir / 'training_history.json'
+        
+        history_data = {
+            'history': self.history,
+            'best_val_acc': self.best_val_acc,
+            'best_val_loss': self.best_val_loss,
+            'total_epochs': self.current_epoch + 1,
+            'num_classes': self.num_classes,
+            'config': {
+                'model': self.config.get('model', {}),
+                'training': self.config.get('training', {}),
+                'arcface': self.config.get('arcface', {})
+            }
+        }
+        
+        with open(history_path, 'w', encoding='utf-8') as f:
+            json.dump(history_data, f, indent=2, ensure_ascii=False)
+        
+        print(f"Saved training history: {history_path}")
     
     def adjust_warmup_lr(self, epoch):
         """Dieu chinh LR trong giai doan warmup"""
@@ -652,6 +687,17 @@ class ArcFaceTrainer:
             print(f"\nTrain Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}%")
             print(f"Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.2f}%")
             print(f"Learning Rate: {self.get_lr():.2e}")
+            
+            # Save to history
+            self.history['epoch'].append(epoch + 1)
+            self.history['train_loss'].append(train_loss)
+            self.history['train_acc'].append(train_acc)
+            self.history['val_loss'].append(val_loss)
+            self.history['val_acc'].append(val_acc)
+            self.history['learning_rate'].append(self.get_lr())
+            
+            # Save history to JSON file
+            self.save_training_history()
             
             if self.writer:
                 self.writer.add_scalar('Train/Loss', train_loss, epoch)
@@ -722,6 +768,11 @@ class ArcFaceTrainer:
         self.best_val_acc = checkpoint['best_val_acc']
         self.best_val_loss = checkpoint.get('best_val_loss', float('inf'))
         self.global_step = checkpoint.get('global_step', 0)
+        
+        # Restore history
+        if 'history' in checkpoint:
+            self.history = checkpoint['history']
+            print(f"Restored training history ({len(self.history['epoch'])} epochs)")
         
         # Restore warmup state neu can
         if checkpoint.get('warmup_enabled'):

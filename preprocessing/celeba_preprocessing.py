@@ -5,6 +5,10 @@ Su dung cac file metadata goc:
 - list_landmarks_align_celeba.csv: 5 diem landmark
 - list_attr_celeba.csv: 40 thuoc tinh khuon mat
 - list_bbox_celeba.csv: Bounding box
+
+Modules:
+- FaceDetector: Detect face tu anh moi (MTCNN/RetinaFace/OpenCV)
+- CelebAPreprocessor: Pipeline xu ly CelebA dataset
 """
 
 import os
@@ -28,6 +32,12 @@ except ImportError:
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(ROOT_DIR)
+
+try:
+    from preprocessing.face_detector import FaceDetector
+    HAS_FACE_DETECTOR = True
+except ImportError:
+    HAS_FACE_DETECTOR = False
 
 # ArcFace template 112x112
 ARCFACE_TEMPLATE = np.array([
