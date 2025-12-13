@@ -796,6 +796,14 @@ class ArcFaceTrainer:
             self.warmup_epochs = checkpoint.get('warmup_epochs', 5)
             self.target_lr = checkpoint.get('target_lr', self.config['training']['optimizer']['lr'])
         
+        # Auto-extend num_epochs neu da train het
+        num_epochs = self.config['training']['num_epochs']
+        if self.current_epoch >= num_epochs:
+            new_num_epochs = self.current_epoch + 50
+            print(f"\n[AUTO-EXTEND] current_epoch ({self.current_epoch}) >= num_epochs ({num_epochs})")
+            print(f"[AUTO-EXTEND] Tang num_epochs tu {num_epochs} len {new_num_epochs}")
+            self.config['training']['num_epochs'] = new_num_epochs
+        
         print(f"Resumed from epoch {self.current_epoch}")
         print(f"Best val acc so far: {self.best_val_acc:.2f}%")
         print(f"Global step: {self.global_step}")
