@@ -40,6 +40,13 @@ training:
     enabled: true
     max_norm: 5.0
 
+  # Regularization techniques
+  label_smoothing: 0.1 # Giup model khong qua tu tin, cai thien generalization
+
+  mixup:
+    enabled: true
+    alpha: 0.2 # Beta distribution parameter - gia tri nho de khong thay doi qua nhieu
+
   early_stopping:
     enabled: true
     patience: 15 # Tang patience vi can nhieu epochs hon

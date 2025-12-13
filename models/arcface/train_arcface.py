@@ -63,6 +63,25 @@ from models.arcface.arcface_model import ArcFaceModel, freeze_layers, load_pretr
 from models.arcface.arcface_dataloader import create_dataloaders, create_folder_dataloaders, visualize_batch, benchmark_dataloader
 
 
+def mixup_data(x, y, alpha=0.2):
+    """Mixup augmentation: tron 2 anh va labels de tao data ao"""
+    if alpha > 0:
+        lam = np.random.beta(alpha, alpha)
+    else:
+        lam = 1.0
+    batch_size = x.size(0)
+    index = torch.randperm(batch_size).to(x.device)
+    mixed_x = lam * x + (1 - lam) * x[index, :]
+    y_a, y_b = y, y[index]
+    return mixed_x, y_a, y_b, lam
+
+
+def mixup_criterion(criterion, pred, y_a, y_b, lam):
+    """Mixup loss: ket hop loss cua 2 labels theo ti le lam"""
+    return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
+
+
+
 class EarlyStopping:
     """
     Early Stopping ket hop voi Learning Rate Scheduling
@@ -277,8 +296,18 @@ class ArcFaceTrainer:
         
         self.model = self.model.to(self.device)
         
-        # Loss function
-        self.criterion = nn.CrossEntropyLoss()
+        # Loss function with Label Smoothing
+        label_smoothing = self.config['training'].get('label_smoothing', 0.0)
+        self.criterion = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
+        if label_smoothing > 0:
+            print(f"Label Smoothing: {label_smoothing}")
+        
+        # Mixup config
+        mixup_config = self.config['training'].get('mixup', {})
+        self.use_mixup = mixup_config.get('enabled', False)
+        self.mixup_alpha = mixup_config.get('alpha', 0.2)
+        if self.use_mixup:
+            print(f"Mixup: enabled (alpha={self.mixup_alpha})")
         
         # Tinh tong parameters
         total_params = sum(p.numel() for p in self.model.parameters())
@@ -427,11 +456,21 @@ class ArcFaceTrainer:
             
             self.optimizer.zero_grad()
             
+            # Apply Mixup if enabled
+            if self.use_mixup:
+                images, labels_a, labels_b, lam = mixup_data(images, labels, self.mixup_alpha)
+            else:
+                labels_a, labels_b, lam = labels, labels, 1.0
+            
             # Forward pass voi Mixed Precision
             if self.use_amp:
                 with autocast('cuda'):
-                    outputs, embeddings = self.model(images, labels)
-                    loss = self.criterion(outputs, labels)
+                    # ArcFace can label de tinh margin - dung labels_a
+                    outputs, embeddings = self.model(images, labels_a)
+                    if self.use_mixup:
+                        loss = mixup_criterion(self.criterion, outputs, labels_a, labels_b, lam)
+                    else:
+                        loss = self.criterion(outputs, labels)
                 
                 # Backward pass voi GradScaler
                 self.scaler.scale(loss).backward()
@@ -446,8 +485,11 @@ class ArcFaceTrainer:
                 self.scaler.update()
             else:
                 # Forward pass binh thuong
-                outputs, embeddings = self.model(images, labels)
-                loss = self.criterion(outputs, labels)
+                outputs, embeddings = self.model(images, labels_a)
+                if self.use_mixup:
+                    loss = mixup_criterion(self.criterion, outputs, labels_a, labels_b, lam)
+                else:
+                    loss = self.criterion(outputs, labels)
                 
                 # Backward pass
                 loss.backward()
