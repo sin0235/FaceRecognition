@@ -1,0 +1,101 @@
+# Config ArcFace Resume Training - Fix Overfitting
+# Resume tu checkpoint 100 epochs voi regularization manh hon
+# Val acc hien tai: 77.5% | Train acc: 90.3% | Gap: ~13%
+
+# Model Architecture - GIU NGUYEN
+model:
+  backbone: resnet50
+  embedding_size: 512
+  pretrained: true
+  freeze_ratio: 0.0
+
+# ArcFace Loss - TANG MARGIN DE KHAT KHAO HON
+arcface:
+  margin: 0.35 # Tang tu 0.25 len 0.35 - khat khao hon, giam overfit
+  scale: 48.0 # Giu nguyen
+  easy_margin: false # Tat easy_margin de khat khao hon
+
+# Training Configuration - TOI UU CHO RESUME
+training:
+  num_epochs: 30 # Resume them 30 epochs
+  batch_size: 128
+  num_workers: 8
+
+  # KHONG CAN WARMUP khi resume
+  warmup:
+    enabled: false
+
+  # Optimizer - TANG REGULARIZATION
+  optimizer:
+    type: sgd
+    lr: 0.002 # Bat dau lai voi LR thap hon (thay vi 0.005)
+    momentum: 0.9
+    weight_decay: 0.0015 # TANG TU 0.0005 -> 0.0015 (giam overfit)
+
+  # Scheduler - COSINE ANNEALING WITH RESTART
+  scheduler:
+    type: cosine # Su dung cosine de smooth decay
+    eta_min: 0.0001 # Min LR cao hon de khong bi stuck
+    # Cosine se decay tu lr=0.002 xuong eta_min=0.0001 trong 30 epochs
+
+  # Gradient clipping
+  grad_clip:
+    enabled: true
+    max_norm: 5.0
+
+  # Early stopping - CAI THIEN
+  early_stopping:
+    enabled: true
+    patience: 8 # Giam patience xuong 8 (du voi 30 epochs)
+    min_delta: 0.001 # Tang threshold de chi stop khi that su khong cai thien
+
+  # LABEL SMOOTHING - GIAM OVERCONFIDENCE
+  label_smoothing: 0.1 # Smooth labels de giam overfit
+
+# Data Configuration
+data:
+  mode: folder
+  train_data_root: data/train
+  val_data_root: data/val
+
+  train_csv: data/metadata/train_labels.csv
+  val_csv: data/metadata/val_labels.csv
+
+  min_images_per_identity: 5
+  class_balanced_sampling: true
+  augment_strength: heavy # GIU HEAVY augmentation
+  image_size: 112
+
+  normalize:
+    mean: [0.5, 0.5, 0.5]
+    std: [0.5, 0.5, 0.5]
+
+# Checkpointing
+checkpoint:
+  save_dir: /kaggle/working/checkpoints/arcface
+  save_best: true
+  save_interval: 1
+  keep_last_n: 2
+
+# Logging
+logging:
+  use_tensorboard: false
+  log_dir: /kaggle/working/logs/arcface
+  log_interval: 50
+
+  embedding_vis:
+    enabled: false
+
+# Device
+device: cuda
+
+# Mixed Precision
+mixed_precision:
+  enabled: true
+
+# RESUME Options
+resume:
+  checkpoint_path: /kaggle/working/checkpoints/arcface/arcface_best.pth
+  reset_optimizer: true # RESET optimizer state de escape local minimum
+  reset_scheduler: true # RESET scheduler de bat dau lai schedule
+  load_training_history: true # Load history de tiep tuc tracking

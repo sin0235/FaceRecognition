@@ -98,3 +98,4 @@ NOTES.md
 #Tạm ignore file data, sau train xong mình thêm lại hen
 data/CelebA_Aligned/
 data/meta_origin/
+*.md
