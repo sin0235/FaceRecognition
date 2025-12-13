@@ -27,7 +27,7 @@ training:
 
   optimizer:
     type: sgd
-    lr: 0.0005 # LR moi khi resume - khong qua cao de tranh pha model
+    lr: 0.0005
     momentum: 0.9
     weight_decay: 0.0005
 
@@ -43,7 +43,7 @@ training:
 
   early_stopping:
     enabled: true
-    patience: 15
+    patience: 9
     min_delta: 0.0001
 
   # Label Smoothing - giam overfitting
@@ -63,7 +63,7 @@ data:
 
   min_images_per_identity: 5
   class_balanced_sampling: true
-  augment_strength: strong # Tang tu normal len strong - augmentation manh hon
+  augment_strength: strong
   image_size: 112
 
   normalize:
