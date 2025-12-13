@@ -16,7 +16,7 @@ arcface:
 
 # Training Configuration - Fine-tune phase
 training:
-  num_epochs: 30 # Them 30 epochs nua (tu epoch 50)
+  num_epochs: 100 # Them 30 epochs nua (tu epoch 50)
   batch_size: 128
   num_workers: 4
 
