@@ -12,10 +12,7 @@ model:
 # ArcFace Loss - DIEU CHINH CHO DATASET NHO
 arcface:
   margin: 0.25 # Giam xuong 0.2 de de hoi tu voi it data/class
-  scale: 40.0 # Giam xuong 30 de on dinh hon (paper dung 64 voi 5.8M images)
-  easy_margin: true # Giu easy_margin de de hoi tu
-
-# Training Configuration - toi uu cho dataset nho
+  scale: 48.0
 training:
   num_epochs: 100 # Tang len 100 vi LR thap hon can nhieu epochs
   batch_size: 128
@@ -28,8 +25,7 @@ training:
 
   optimizer:
     type: sgd
-    lr: 0.0075 # GIAM TU 0.1 XUONG 0.01 - phu hop dataset nho
-    momentum: 0.9
+    lr: 0.005
     weight_decay: 0.0005 # Giam weight_decay de tranh underfitting
 
   scheduler:
