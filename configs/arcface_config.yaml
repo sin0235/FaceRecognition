@@ -10,7 +10,7 @@ model:
 
 # ArcFace Loss - DIEU CHINH CHO NHIEU CLASSES
 arcface:
-  margin: 0.1 # Giam manh tu 0.35 - bat dau nho roi tang dan
+  margin: 0.15 # Giam manh tu 0.35 - bat dau nho roi tang dan
   scale: 64.0 # Tang tu 30 len 64 (gia tri paper goc)
   easy_margin: true # Bat easy_margin de de hoi tu hon
 
@@ -27,7 +27,7 @@ training:
 
   optimizer:
     type: sgd
-    lr: 0.0005 # LR moi khi resume - khong qua cao de tranh pha model
+    lr: 0.0001 # LR moi khi resume - khong qua cao de tranh pha model
     momentum: 0.9
     weight_decay: 0.0005
 
@@ -43,7 +43,7 @@ training:
 
   early_stopping:
     enabled: true
-    patience: 9 # Tang patience vi can nhieu epochs hon
+    patience: 15 # Tang patience vi can nhieu epochs hon
     min_delta: 0.0001 # Giam threshold
 
 # Data Configuration
@@ -60,7 +60,7 @@ data:
 
   min_images_per_identity: 5
   class_balanced_sampling: true
-  augment_strength: strong
+  augment_strength: normal
   image_size: 112
 
   normalize:
