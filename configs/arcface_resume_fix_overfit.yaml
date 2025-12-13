@@ -17,7 +17,7 @@ arcface:
 
 # Training Configuration - TOI UU CHO RESUME
 training:
-  num_epochs: 30 # Resume them 30 epochs
+  num_epochs: 130 # Total: 100 (da train) + 30 (them) = 130 epochs
   batch_size: 128
   num_workers: 8
 
