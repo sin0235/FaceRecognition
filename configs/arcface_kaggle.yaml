@@ -17,7 +17,7 @@ arcface:
 
 # Training Configuration - toi uu cho dataset nho
 training:
-  num_epochs: 100 # Tang len 100 vi LR thap hon can nhieu epochs
+  num_epochs: 250 # Tang len 100 vi LR thap hon can nhieu epochs
   batch_size: 128
   num_workers: 8
 
