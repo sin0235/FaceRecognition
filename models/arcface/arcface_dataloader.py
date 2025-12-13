@@ -313,7 +313,7 @@ def get_train_transforms(image_size=112, use_albumentations=False, augment_stren
         if augment_strength == 'heavy':
             # HEAVY: Augmentation manh nhat cho dataset it anh/class
             return A.Compose([
-                A.RandomResizedCrop(height=image_size, width=image_size, scale=(0.85, 1.0), ratio=(0.95, 1.05), p=0.5),
+                A.RandomResizedCrop(size=(image_size, image_size), scale=(0.85, 1.0), ratio=(0.95, 1.05), p=0.5),
                 A.Resize(image_size, image_size),
                 A.HorizontalFlip(p=0.5),
                 A.Rotate(limit=20, p=0.6, border_mode=0),
