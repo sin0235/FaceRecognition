@@ -47,7 +47,7 @@ training:
     min_delta: 0.0001
 
   # Label Smoothing - giam overfitting
-  label_smoothing: 0.1
+  label_smoothing: 0.0
 
 # Data Configuration
 data:
