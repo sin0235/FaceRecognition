@@ -27,7 +27,7 @@ training:
 
   optimizer:
     type: sgd
-    lr: 0.0005
+    lr: 0.0005 # LR moi khi resume - khong qua cao de tranh pha model
     momentum: 0.9
     weight_decay: 0.0005
 
@@ -43,11 +43,8 @@ training:
 
   early_stopping:
     enabled: true
-    patience: 9
-    min_delta: 0.0001
-
-  # Label Smoothing - giam overfitting
-  label_smoothing: 0.0
+    patience: 9 # Tang patience vi can nhieu epochs hon
+    min_delta: 0.0001 # Giam threshold
 
 # Data Configuration
 data:
