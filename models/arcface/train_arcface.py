@@ -655,8 +655,9 @@ class ArcFaceTrainer:
         
         num_epochs = self.config['training']['num_epochs']
         start_time = time.time()
+        start_epoch = self.current_epoch  # Resume tu epoch da luu
         
-        for epoch in range(num_epochs):
+        for epoch in range(start_epoch, num_epochs):
             self.current_epoch = epoch
             
             # Warmup LR adjustment
