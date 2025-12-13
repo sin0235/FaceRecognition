@@ -27,7 +27,7 @@ training:
 
   optimizer:
     type: sgd
-    lr: 0.01 # LR vua phai, tranh pha pretrained weights
+    lr: 0.0001 # Giam manh de model hoi tu voi 9000+ classes
     momentum: 0.9
     weight_decay: 0.0005
 
@@ -44,7 +44,7 @@ training:
   label_smoothing: 0.1 # Giup model khong qua tu tin, cai thien generalization
 
   mixup:
-    enabled: true
+    enabled: false # Tat khi model chua hoi tu
     alpha: 0.2 # Beta distribution parameter - gia tri nho de khong thay doi qua nhieu
 
   early_stopping:
@@ -66,7 +66,7 @@ data:
 
   min_images_per_identity: 5
   class_balanced_sampling: true
-  augment_strength: heavy # Tang data variety, giam overfitting
+  augment_strength: medium # Giam xuong de model hoc duoc features co ban
   image_size: 112
 
   normalize:
