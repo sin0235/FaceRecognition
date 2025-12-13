@@ -27,7 +27,7 @@ training:
 
   optimizer:
     type: sgd
-    lr: 0.1 # LR moi khi resume - khong qua cao de tranh pha model
+    lr: 0.001 # LR moi khi resume - khong qua cao de tranh pha model
     momentum: 0.9
     weight_decay: 0.0005
 
@@ -43,8 +43,11 @@ training:
 
   early_stopping:
     enabled: true
-    patience: 15 # Tang patience vi can nhieu epochs hon
-    min_delta: 0.0001 # Giam threshold
+    patience: 15
+    min_delta: 0.0001
+
+  # Label Smoothing - giam overfitting
+  label_smoothing: 0.1
 
 # Data Configuration
 data:
@@ -58,9 +61,9 @@ data:
   train_csv: data/metadata/train_labels.csv
   val_csv: data/metadata/val_labels.csv
 
-  min_images_per_identity: 10
+  min_images_per_identity: 5
   class_balanced_sampling: true
-  augment_strength: normal
+  augment_strength: strong # Tang tu normal len strong - augmentation manh hon
   image_size: 112
 
   normalize:

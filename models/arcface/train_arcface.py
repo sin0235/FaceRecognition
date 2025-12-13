@@ -250,7 +250,7 @@ class ArcFaceTrainer:
                 batch_size=batch_size,
                 num_workers=num_workers,
                 image_size=image_size,
-                use_albumentations=False,
+                use_albumentations=True,  # Bat albumentations de dung strong/heavy augmentation
                 min_images_per_identity=min_images,
                 class_balanced_sampling=class_balanced,
                 augment_strength=augment_strength
@@ -265,7 +265,7 @@ class ArcFaceTrainer:
                 batch_size=batch_size,
                 num_workers=num_workers,
                 image_size=image_size,
-                use_albumentations=False,
+                use_albumentations=True,  # Bat albumentations
                 train_data_root=train_data_root,
                 val_data_root=val_data_root
             )
