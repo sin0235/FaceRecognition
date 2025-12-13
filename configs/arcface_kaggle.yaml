@@ -16,13 +16,13 @@ arcface:
   easy_margin: true
 
 training:
-  num_epochs: 100
+  num_epochs: 50
   batch_size: 128
   num_workers: 8
 
   warmup:
     enabled: true
-    epochs: 10
+    epochs: 5
     start_lr: 0.0001
 
   optimizer:
@@ -43,7 +43,7 @@ training:
 
   early_stopping:
     enabled: true
-    patience: 20
+    patience: 12
     min_delta: 0.0001
 
 # Data Configuration
