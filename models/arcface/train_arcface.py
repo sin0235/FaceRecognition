@@ -751,6 +751,8 @@ class ArcFaceTrainer:
     
     def resume_training(self, checkpoint_path):
         """Resume training tu checkpoint"""
+        import json
+        
         print(f"\nResume training tu: {checkpoint_path}")
         
         checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
@@ -770,10 +772,23 @@ class ArcFaceTrainer:
         self.best_val_loss = checkpoint.get('best_val_loss', float('inf'))
         self.global_step = checkpoint.get('global_step', 0)
         
-        # Restore history
-        if 'history' in checkpoint:
+        # Restore history - uu tien tu file JSON, sau do tu checkpoint
+        history_loaded = False
+        history_path = self.checkpoint_dir / 'training_history.json'
+        
+        if history_path.exists():
+            try:
+                with open(history_path, 'r', encoding='utf-8') as f:
+                    history_data = json.load(f)
+                self.history = history_data.get('history', self.history)
+                history_loaded = True
+                print(f"Restored training history from JSON ({len(self.history['epoch'])} epochs)")
+            except Exception as e:
+                print(f"Warning: Could not load history from JSON: {e}")
+        
+        if not history_loaded and 'history' in checkpoint:
             self.history = checkpoint['history']
-            print(f"Restored training history ({len(self.history['epoch'])} epochs)")
+            print(f"Restored training history from checkpoint ({len(self.history['epoch'])} epochs)")
         
         # Restore warmup state neu can
         if checkpoint.get('warmup_enabled'):
