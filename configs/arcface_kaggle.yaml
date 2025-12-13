@@ -44,7 +44,7 @@ training:
 
   early_stopping:
     enabled: true
-    patience: 20 # Tang patience vi cosine scheduler giam cham
+    patience: 12 # Tang patience vi cosine scheduler giam cham
     min_delta: 0.0001
 
 # Data Configuration
