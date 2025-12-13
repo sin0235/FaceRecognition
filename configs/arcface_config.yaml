@@ -16,7 +16,7 @@ arcface:
 
 # Training Configuration - toi uu cho Kaggle
 training:
-  num_epochs: 100
+  num_epochs: 50
   batch_size: 128
   num_workers: 4
 

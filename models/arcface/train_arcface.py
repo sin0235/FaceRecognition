@@ -791,8 +791,13 @@ class ArcFaceTrainer:
         
         return self.best_val_acc
     
-    def resume_training(self, checkpoint_path):
-        """Resume training tu checkpoint"""
+    def resume_training(self, checkpoint_path, reset_optimizer=False):
+        """Resume training tu checkpoint
+        
+        Args:
+            checkpoint_path: Duong dan den file checkpoint
+            reset_optimizer: Neu True, khong load optimizer/scheduler state ma dung LR moi tu config
+        """
         import json
         
         print(f"\nResume training tu: {checkpoint_path}")
@@ -800,10 +805,17 @@ class ArcFaceTrainer:
         checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
         
         self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         
-        if checkpoint.get('scheduler_state_dict') and self.scheduler:
-            self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        if reset_optimizer:
+            print("[RESET] Khong load optimizer/scheduler state - dung LR moi tu config")
+            new_lr = self.config['training']['optimizer']['lr']
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = new_lr
+            print(f"[RESET] Set LR = {new_lr}")
+        else:
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            if checkpoint.get('scheduler_state_dict') and self.scheduler:
+                self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         
         # Restore GradScaler state cho Mixed Precision
         if checkpoint.get('scaler_state_dict') and self.scaler:
@@ -832,8 +844,8 @@ class ArcFaceTrainer:
             self.history = checkpoint['history']
             print(f"Restored training history from checkpoint ({len(self.history['epoch'])} epochs)")
         
-        # Restore warmup state neu can
-        if checkpoint.get('warmup_enabled'):
+        # Restore warmup state neu can (chi khi khong reset optimizer)
+        if not reset_optimizer and checkpoint.get('warmup_enabled'):
             self.warmup_enabled = checkpoint['warmup_enabled']
             self.warmup_epochs = checkpoint.get('warmup_epochs', 5)
             self.target_lr = checkpoint.get('target_lr', self.config['training']['optimizer']['lr'])
@@ -871,6 +883,8 @@ def parse_args():
                        help='Thu muc luu checkpoints')
     parser.add_argument('--resume', type=str, default=None,
                        help='Resume tu checkpoint')
+    parser.add_argument('--reset_optimizer', action='store_true',
+                       help='Reset optimizer va scheduler khi resume (dung LR moi tu config)')
     
     return parser.parse_args()
 
@@ -887,6 +901,7 @@ def main():
     print(f"Data dir: {args.data_dir}")
     print(f"Checkpoint dir: {args.checkpoint_dir}")
     print(f"Resume: {args.resume}")
+    print(f"Reset optimizer: {args.reset_optimizer}")
     print("="*60)
     
     # Khoi tao trainer
@@ -899,7 +914,7 @@ def main():
     
     # Resume neu co
     if args.resume and os.path.exists(args.resume):
-        trainer.resume_training(args.resume)
+        trainer.resume_training(args.resume, reset_optimizer=args.reset_optimizer)
     
     # Bat dau training
     try:
