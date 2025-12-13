@@ -16,26 +16,26 @@ arcface:
 
 # Training Configuration - toi uu cho Kaggle
 training:
-  num_epochs: 50
-  batch_size: 128 # Tang len 128 neu GPU cho phep
+  num_epochs: 100
+  batch_size: 128
   num_workers: 4
 
   warmup:
-    enabled: true
-    epochs: 5 # Tang warmup len 5 epochs
-    start_lr: 0.00001 # Bat dau thap hon
+    enabled: false # Tat warmup khi resume
+    epochs: 5
+    start_lr: 0.00001
 
   optimizer:
     type: sgd
-    lr: 0.1 # Tang LR len 0.1 (theo paper ArcFace)
+    lr: 0.001 # LR moi khi resume - khong qua cao de tranh pha model
     momentum: 0.9
     weight_decay: 0.0005
 
   scheduler:
-    type: step # Dung step thay vi cosine
-    step_size: 10 # Giam LR moi 10 epochs
-    gamma: 0.1
-    eta_min: 0.00001
+    type: step
+    step_size: 20 # Giam LR moi 20 epochs
+    gamma: 0.5 # Giam nhe hon (0.5 thay vi 0.1)
+    eta_min: 0.0001 # Khong giam duoi 1e-04
 
   grad_clip:
     enabled: true
