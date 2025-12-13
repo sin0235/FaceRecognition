@@ -1,5 +1,5 @@
-# Config ArcFace Fine-tune - Phase 2
-# Resume tu epoch 49 (val_acc 80.33%) - Giam overfitting, tang val_acc len 82-83%
+# Config ArcFace Training cho Kaggle
+# Toi uu hoa cho GPU 16GB (P100/T4) voi nhieu classes (9000+)
 
 # Model Architecture
 model:
@@ -8,31 +8,33 @@ model:
   pretrained: true
   freeze_ratio: 0.0 # KHONG dong bang - can train full backbone
 
-# ArcFace Loss - TANG MARGIN DE KHAT KHAO HON
+# ArcFace Loss - DIEU CHINH CHO NHIEU CLASSES
 arcface:
-  margin: 0.2 # Tang tu 0.1 len 0.2 - khat khao hon, giam overfit
-  scale: 64.0 # Giu nguyen - da hoat dong tot
-  easy_margin: false # TAT de khat khao hon
+  margin: 0.1 # Giam manh tu 0.35 - bat dau nho roi tang dan
+  scale: 64.0 # Tang tu 30 len 64 (gia tri paper goc)
+  easy_margin: true # Bat easy_margin de de hoi tu hon
 
-# Training Configuration - Fine-tune phase
+# Training Configuration - toi uu cho Kaggle
 training:
-  num_epochs: 100 # Them 30 epochs nua (tu epoch 50)
-  batch_size: 128
+  num_epochs: 50
+  batch_size: 128 # Tang len 128 neu GPU cho phep
   num_workers: 4
 
   warmup:
-    enabled: false # TAT warmup khi resume
+    enabled: true
+    epochs: 5 # Tang warmup len 5 epochs
+    start_lr: 0.00001 # Bat dau thap hon
 
   optimizer:
     type: sgd
-    lr: 0.01 # Giam tu 0.1, bat dau fine-tune voi LR thap hon
+    lr: 0.1 # Tang LR len 0.1 (theo paper ArcFace)
     momentum: 0.9
-    weight_decay: 0.001 # TANG TU 0.0005 - regularization manh hon
+    weight_decay: 0.0005
 
   scheduler:
-    type: step
+    type: step # Dung step thay vi cosine
     step_size: 10 # Giam LR moi 10 epochs
-    gamma: 0.1 # LR: 0.01 -> 0.001 (epoch 10) -> 0.0001 (epoch 20)
+    gamma: 0.1
     eta_min: 0.00001
 
   grad_clip:
@@ -41,11 +43,8 @@ training:
 
   early_stopping:
     enabled: true
-    patience: 10 # Giam patience trong fine-tune phase
-    min_delta: 0.001 # Tang threshold de chi stop khi that su khong cai thien
-
-  # LABEL SMOOTHING - GIAM OVERCONFIDENCE
-  label_smoothing: 0.05 # Them label smoothing nhe
+    patience: 15 # Tang patience vi can nhieu epochs hon
+    min_delta: 0.0001 # Giam threshold
 
 # Data Configuration
 data:
@@ -61,7 +60,7 @@ data:
 
   min_images_per_identity: 5
   class_balanced_sampling: true
-  augment_strength: heavy # TANG augmentation de giam overfit
+  augment_strength: normal
   image_size: 112
 
   normalize:
