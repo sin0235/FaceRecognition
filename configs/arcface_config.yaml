@@ -27,7 +27,7 @@ training:
 
   optimizer:
     type: sgd
-    lr: 0.001 # LR moi khi resume - khong qua cao de tranh pha model
+    lr: 0.0005 # LR moi khi resume - khong qua cao de tranh pha model
     momentum: 0.9
     weight_decay: 0.0005
 
