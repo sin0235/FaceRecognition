@@ -28,7 +28,7 @@ training:
 
   optimizer:
     type: sgd
-    lr: 0.01 # GIAM TU 0.1 XUONG 0.01 - phu hop dataset nho
+    lr: 0.001 # GIAM TU 0.1 XUONG 0.01 - phu hop dataset nho
     momentum: 0.9
     weight_decay: 0.0005 # Giam weight_decay de tranh underfitting
 
