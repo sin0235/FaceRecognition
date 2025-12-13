@@ -784,6 +784,7 @@ class ArcFaceTrainer:
         print(f"Resumed from epoch {self.current_epoch}")
         print(f"Best val acc so far: {self.best_val_acc:.2f}%")
         print(f"Global step: {self.global_step}")
+        print(f"Current LR: {self.get_lr():.2e}")
         print(f"Mixed Precision: {'ENABLED' if self.use_amp else 'DISABLED'}")
         
         # Kiem tra warmup status
