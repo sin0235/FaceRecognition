@@ -56,7 +56,7 @@ static/uploads/*
 *.weights
 
 # Training logs
-# logs/
+logs/
 runs/
 *.log
 tensorboard_logs/
