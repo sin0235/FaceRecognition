@@ -58,7 +58,7 @@ data:
   train_csv: data/metadata/train_labels.csv
   val_csv: data/metadata/val_labels.csv
 
-  min_images_per_identity: 5
+  min_images_per_identity: 10
   class_balanced_sampling: true
   augment_strength: normal
   image_size: 112
