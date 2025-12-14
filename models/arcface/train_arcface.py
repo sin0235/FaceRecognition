@@ -58,7 +58,37 @@ try:
 except Exception:
     pass
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+def setup_project_path():
+    """Setup sys.path cho import modules"""
+    try:
+        # Thu dung __file__ truoc
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(os.path.dirname(script_dir))
+    except NameError:
+        # __file__ khong kha dung (notebook/interactive)
+        project_root = os.getcwd()
+    
+    # Kiem tra xem project_root co chua models/ khong
+    if not os.path.exists(os.path.join(project_root, 'models')):
+        # Thu tim trong cac vi tri pho bien (Kaggle/Colab)
+        possible_roots = [
+            '/kaggle/working/FaceRecognition',
+            '/content/FaceRecognition',
+            os.path.join(os.getcwd(), 'FaceRecognition'),
+        ]
+        for root in possible_roots:
+            if os.path.exists(os.path.join(root, 'models')):
+                project_root = root
+                break
+    
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    
+    return project_root
+
+PROJECT_ROOT = setup_project_path()
+print(f"Project root: {PROJECT_ROOT}")
+
 from models.arcface.arcface_model import ArcFaceModel, freeze_layers, load_pretrained_backbone
 from models.arcface.arcface_dataloader import create_dataloaders, create_folder_dataloaders, visualize_batch, benchmark_dataloader
 
