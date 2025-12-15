@@ -1,5 +1,6 @@
 import sys
 import os
+import tempfile
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(ROOT_DIR)
@@ -10,6 +11,7 @@ from inference.recognition_engine import RecognitionEngine
 
 
 engine = RecognitionEngine()
+TEMP_DIR = tempfile.gettempdir()
 
 st.set_page_config(
     page_title="Celebrity Face Recognition",
@@ -97,15 +99,23 @@ with st.container():
 
 if uploaded:
     img = Image.open(uploaded).convert("RGB")
-    temp_path = os.path.join(ROOT_DIR, "temp.jpg")
-    img.save(temp_path)
+    
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False, dir=TEMP_DIR) as tmp:
+        temp_path = tmp.name
+        img.save(temp_path)
 
     col_img, col_info = st.columns([3, 2])
 
     with col_img:
         st.image(img, caption="Uploaded Image", use_column_width=True)
 
-    name, score = engine.recognize(temp_path)
+    try:
+        result = engine.recognize(temp_path)
+        name = result.get('identity', 'Unknown')
+        score = result.get('confidence', 0.0)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
     with col_info:
         st.markdown('<div class="result-card">', unsafe_allow_html=True)

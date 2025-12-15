@@ -11,17 +11,32 @@ import cv2
 import numpy as np
 from PIL import Image
 import torch
+import tempfile
+import uuid
+import atexit
+import shutil
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT_DIR)
 
 app = Flask(__name__)
+app.config["TEMP_FOLDER"] = os.path.join(tempfile.gettempdir(), "face_recognition_temp")
 app.config["UPLOAD_FOLDER"] = "static/uploads"
 app.config["GRADCAM_FOLDER"] = "static/gradcam"
 app.config["TEST_DATA_DIR"] = os.path.join(ROOT_DIR, "data/CelebA_Aligned/test")
 
+os.makedirs(app.config["TEMP_FOLDER"], exist_ok=True)
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 os.makedirs(app.config["GRADCAM_FOLDER"], exist_ok=True)
+
+
+def cleanup_temp_folder():
+    """Xoa thu muc temp khi app shutdown"""
+    if os.path.exists(app.config["TEMP_FOLDER"]):
+        shutil.rmtree(app.config["TEMP_FOLDER"], ignore_errors=True)
+
+
+atexit.register(cleanup_temp_folder)
 
 arcface_engine = None
 facenet_engine = None
@@ -201,41 +216,52 @@ def home():
     image_name = None
     threshold_val = 0.5
     gradcam_image = None
+    display_image = None
 
     if request.method == "POST":
         threshold_val = float(request.form.get("threshold", 0.5))
         file = request.files.get("image")
         if file and file.filename:
-            image_name = file.filename
-            save_path = os.path.join(app.config["UPLOAD_FOLDER"], image_name)
-            file.save(save_path)
+            unique_id = str(uuid.uuid4())[:8]
+            ext = os.path.splitext(file.filename)[1]
+            temp_filename = f"{unique_id}{ext}"
+            temp_path = os.path.join(app.config["TEMP_FOLDER"], temp_filename)
+            file.save(temp_path)
             
-            arcface_result = recognize_with_arcface(save_path, threshold_val)
-            facenet_result = recognize_with_facenet(save_path, threshold_val)
-            lbph_result = recognize_with_lbph(save_path)
-            
-            def fmt(res):
-                if res.get("status") == "success":
-                    return {"text": f"{res['identity']} ({res['confidence']:.2f})", "ok": True, "detail": res}
-                return {"text": "Error", "ok": False, "detail": res}
-            
-            result = {
-                "arcface": fmt(arcface_result),
-                "facenet": fmt(facenet_result),
-                "lbph": fmt(lbph_result)
-            }
-            
-            # Generate Grad-CAM
-            exp_engine = get_explainability_engine()
-            if exp_engine:
-                try:
-                    exp_result = exp_engine.explain(save_path)
-                    gradcam_filename = f"gradcam_{image_name}"
-                    gradcam_path = os.path.join(app.config["GRADCAM_FOLDER"], gradcam_filename)
-                    cv2.imwrite(gradcam_path, cv2.cvtColor(exp_result['overlay'], cv2.COLOR_RGB2BGR))
-                    gradcam_image = f"gradcam/{gradcam_filename}"
-                except Exception as e:
-                    print(f"Grad-CAM error: {e}")
+            try:
+                arcface_result = recognize_with_arcface(temp_path, threshold_val)
+                facenet_result = recognize_with_facenet(temp_path, threshold_val)
+                lbph_result = recognize_with_lbph(temp_path)
+                
+                def fmt(res):
+                    if res.get("status") == "success":
+                        return {"text": f"{res['identity']} ({res['confidence']:.2f})", "ok": True, "detail": res}
+                    return {"text": "Error", "ok": False, "detail": res}
+                
+                result = {
+                    "arcface": fmt(arcface_result),
+                    "facenet": fmt(facenet_result),
+                    "lbph": fmt(lbph_result)
+                }
+                
+                display_filename = f"display_{unique_id}{ext}"
+                display_path = os.path.join(app.config["UPLOAD_FOLDER"], display_filename)
+                shutil.copy2(temp_path, display_path)
+                image_name = display_filename
+                
+                exp_engine = get_explainability_engine()
+                if exp_engine:
+                    try:
+                        exp_result = exp_engine.explain(temp_path)
+                        gradcam_filename = f"gradcam_{unique_id}{ext}"
+                        gradcam_path = os.path.join(app.config["GRADCAM_FOLDER"], gradcam_filename)
+                        cv2.imwrite(gradcam_path, cv2.cvtColor(exp_result['overlay'], cv2.COLOR_RGB2BGR))
+                        gradcam_image = f"gradcam/{gradcam_filename}"
+                    except Exception as e:
+                        print(f"Grad-CAM error: {e}")
+            finally:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
 
     return render_template("home.html", active="home", result=result, 
                           image_name=image_name, threshold=threshold_val, gradcam_image=gradcam_image)
@@ -253,21 +279,28 @@ def batch():
 
         for file in files:
             if file and file.filename:
-                save_path = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
-                file.save(save_path)
+                unique_id = str(uuid.uuid4())[:8]
+                ext = os.path.splitext(file.filename)[1]
+                temp_filename = f"{unique_id}{ext}"
+                temp_path = os.path.join(app.config["TEMP_FOLDER"], temp_filename)
+                file.save(temp_path)
 
-                if model_type == "facenet":
-                    rec = recognize_with_facenet(save_path)
-                elif model_type == "lbph":
-                    rec = recognize_with_lbph(save_path)
-                else:
-                    rec = recognize_with_arcface(save_path)
-                
-                results.append({
-                    "image": file.filename,
-                    "name": rec.get("identity", "Error") if rec.get("status") == "success" else "Error",
-                    "score": rec.get("confidence", 0.0)
-                })
+                try:
+                    if model_type == "facenet":
+                        rec = recognize_with_facenet(temp_path)
+                    elif model_type == "lbph":
+                        rec = recognize_with_lbph(temp_path)
+                    else:
+                        rec = recognize_with_arcface(temp_path)
+                    
+                    results.append({
+                        "image": file.filename,
+                        "name": rec.get("identity", "Error") if rec.get("status") == "success" else "Error",
+                        "score": rec.get("confidence", 0.0)
+                    })
+                finally:
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
 
     return render_template("batch.html", active="batch", results=results, model_type=model_type)
 
