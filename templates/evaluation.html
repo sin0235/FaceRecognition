@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card animate">
+  <h2>Model Evaluation</h2>
+  <p class="subtitle">
+    Đánh giá tổng quan mô hình ArcFace trên tập dữ liệu kiểm thử.
+  </p>
+
+  <ul style="line-height:1.8">
+    <li><b>Ưu điểm:</b> ArcFace học được đặc trưng khuôn mặt mạnh, phân biệt tốt các lớp.</li>
+    <li><b>Hạn chế:</b> Hiệu năng phụ thuộc chất lượng ảnh và điều kiện ánh sáng.</li>
+    <li><b>Threshold:</b> Ảnh hưởng trực tiếp đến tỉ lệ false accept / false reject.</li>
+    <li><b>Explainability:</b> Grad-CAM cho thấy mô hình tập trung vào vùng mắt, mũi.</li>
+  </ul>
+
+  <p style="margin-top:16px;color:#6b7280">
+    *Kết quả đánh giá chi tiết sẽ được cập nhật khi pipeline inference hoàn chỉnh.*
+  </p>
+</div>
+
+{% endblock %}

@@ -3,13 +3,44 @@
 
 <div class="card animate">
   <h2>Evaluation Dashboard</h2>
+  <p class="subtitle">
+    Tổng hợp kết quả đánh giá mô hình ArcFace trên tập test.
+  </p>
 
   <div class="stats">
-    <div>Ảnh test: <b>{{ metrics.total }}</b></div>
-    <div>Đúng: <b>{{ metrics.correct }}</b></div>
-    <div>Sai: <b>{{ metrics.wrong }}</b></div>
-    <div>Accuracy: <b>{{ metrics.accuracy }}%</b></div>
+    <div><b>Total images:</b> {{ metrics.total }}</div>
+    <div><b>Correct:</b> {{ metrics.correct }}</div>
+    <div><b>Wrong:</b> {{ metrics.wrong }}</div>
+    <div><b>Accuracy:</b> {{ metrics.accuracy }}%</div>
+    <div><b>Precision:</b> {{ metrics.precision }}</div>
+    <div><b>Recall:</b> {{ metrics.recall }}</div>
+  </div>
+
+  <div style="margin-top:40px">
+    <canvas id="resultChart" height="120"></canvas>
   </div>
 </div>
+
+<script>
+const ctx = document.getElementById('resultChart');
+
+new Chart(ctx, {
+  type: 'bar',
+  data: {
+    labels: ['Correct', 'Wrong'],
+    datasets: [{
+      label: 'Prediction Results',
+      data: [{{ metrics.correct }}, {{ metrics.wrong }}],
+      backgroundColor: ['#2563eb', '#ef4444']
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { display: false }
+    }
+  }
+});
+</script>
 
 {% endblock %}

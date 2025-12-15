@@ -10,6 +10,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
 </head>
 <body>
 
@@ -28,6 +30,9 @@
     <a href="/threshold" class="{{ 'active' if active=='threshold' }}">Threshold</a>
     <a href="/dataset" class="{{ 'active' if active=='dataset' }}">Dataset</a>
     <a href="/dashboard" class="{{ 'active' if active=='dashboard' }}">Dashboard</a>
+    <a href="/batch" class="{{ 'active' if active=='batch' }}">Batch</a>
+    <a href="/explain" class="{{ 'active' if active=='explain' }}">Explain</a>
+    <a href="/evaluation" class="{{ 'active' if active=='evaluation' }}">Evaluation</a>
   </nav>
 </header>
 

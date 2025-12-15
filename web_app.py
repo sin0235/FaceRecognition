@@ -67,12 +67,74 @@ def dataset():
 @app.route("/dashboard")
 def dashboard():
     metrics = {
-        "total": 100,
-        "correct": 76,
-        "wrong": 24,
-        "accuracy": 76
+        "total": 200,
+        "correct": 152,
+        "wrong": 48,
+        "accuracy": 76,
+        "precision": 0.78,
+        "recall": 0.75
     }
-    return render_template("dashboard.html", active="dashboard", metrics=metrics)
+
+    return render_template(
+        "dashboard.html",
+        active="dashboard",
+        metrics=metrics
+    )
+
+@app.route("/batch", methods=["GET", "POST"])
+def batch():
+    results = []
+
+    if request.method == "POST":
+        files = request.files.getlist("images")
+
+        for file in files:
+            if file and file.filename:
+                save_path = os.path.join(
+                    app.config["UPLOAD_FOLDER"], file.filename
+                )
+                file.save(save_path)
+
+                # DEMO kết quả (sau này thay bằng ArcFace thật)
+                results.append({
+                    "image": file.filename,
+                    "name": "My Tam",
+                    "score": 0.76
+                })
+
+    return render_template(
+        "batch.html",
+        active="batch",
+        results=results
+    )
+
+@app.route("/explain", methods=["GET", "POST"])
+def explain():
+    image_name = None
+    gradcam_image = None
+
+    if request.method == "POST":
+        file = request.files.get("image")
+        if file and file.filename:
+            image_name = file.filename
+            save_path = os.path.join(
+                app.config["UPLOAD_FOLDER"], image_name
+            )
+            file.save(save_path)
+
+            # Demo Grad-CAM (sau này thay bằng output thật)
+            gradcam_image = "gradcam/demo_gradcam.jpg"
+
+    return render_template(
+        "explain.html",
+        active="explain",
+        image_name=image_name,
+        gradcam_image=gradcam_image
+    )
+@app.route("/evaluation")
+def evaluation():
+    return render_template("evaluation.html", active="evaluation")
+
 
 
 if __name__ == "__main__":
