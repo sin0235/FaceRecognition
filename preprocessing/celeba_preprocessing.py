@@ -33,12 +33,6 @@ except ImportError:
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(ROOT_DIR)
 
-try:
-    from preprocessing.face_detector import FaceDetector
-    HAS_FACE_DETECTOR = True
-except ImportError:
-    HAS_FACE_DETECTOR = False
-
 # ArcFace template 112x112
 ARCFACE_TEMPLATE = np.array([
     [38.2946, 51.6963],   # left_eye

@@ -3,35 +3,57 @@
 
 <div class="card animate">
   <h2>Batch Processing</h2>
-  <p class="subtitle">
-    Upload nhiều ảnh để chạy nhận diện hàng loạt (Batch Inference).
-  </p>
+  <p class="subtitle">Upload nhiều ảnh để chạy nhận diện hàng loạt.</p>
 
   <form method="POST" enctype="multipart/form-data">
+    <div style="margin-bottom:20px">
+      <label style="font-weight:500">Chọn Model:</label>
+      <select name="model" style="padding:8px 16px; border-radius:8px; border:1px solid #ddd; margin-left:10px">
+        <option value="arcface" {% if model_type == 'arcface' %}selected{% endif %}>ArcFace</option>
+        <option value="facenet" {% if model_type == 'facenet' %}selected{% endif %}>FaceNet</option>
+        <option value="lbph" {% if model_type == 'lbph' %}selected{% endif %}>LBPH</option>
+      </select>
+    </div>
+
     <input type="file" name="images" multiple accept="image/*">
     <br><br>
     <button class="btn">Run Batch</button>
   </form>
 
   {% if results %}
-  <table style="width:100%; margin-top:30px; border-collapse:collapse">
-    <thead>
-      <tr style="background:#eef2ff">
-        <th style="padding:10px; text-align:left">Image</th>
-        <th style="padding:10px; text-align:left">Prediction</th>
-        <th style="padding:10px; text-align:left">Score</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for r in results %}
-      <tr style="border-bottom:1px solid #e5e7eb">
-        <td style="padding:10px">{{ r.image }}</td>
-        <td style="padding:10px">{{ r.name }}</td>
-        <td style="padding:10px">{{ r.score }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div style="margin-top:30px">
+    <h3 style="margin-bottom:15px">Kết quả ({{ results|length }} ảnh)</h3>
+    <table style="width:100%; border-collapse:collapse">
+      <thead>
+        <tr style="background:#eef2ff">
+          <th style="padding:12px; text-align:left">STT</th>
+          <th style="padding:12px; text-align:left">Image</th>
+          <th style="padding:12px; text-align:left">Prediction</th>
+          <th style="padding:12px; text-align:center">Score</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in results %}
+        <tr style="border-bottom:1px solid #e5e7eb">
+          <td style="padding:10px">{{ loop.index }}</td>
+          <td style="padding:10px">{{ r.image }}</td>
+          <td style="padding:10px">
+            {% if r.name == 'Unknown' or r.name == 'Error' %}
+            <span style="color:#ef4444">{{ r.name }}</span>
+            {% else %}
+            <span style="color:#22c55e">{{ r.name }}</span>
+            {% endif %}
+          </td>
+          <td style="padding:10px; text-align:center">
+            <span style="background:{% if r.score >= 0.7 %}#dcfce7{% elif r.score >= 0.5 %}#fef3c7{% else %}#fee2e2{% endif %}; padding:4px 12px; border-radius:20px">
+              {{ "%.2f"|format(r.score) }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% endif %}
 </div>
 

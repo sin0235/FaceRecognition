@@ -1,30 +1,110 @@
-{% extends "base.html" %}
-{% block content %}
+{% extends "base.html" %} {% block content %}
 
 <div class="card animate">
-  <h2>So sánh 2 Model</h2>
-  <p class="subtitle">So sánh kết quả giữa hai mô hình nhận diện.</p>
+  <h2>So sánh 3 Models</h2>
+  <p class="subtitle">
+    So sánh kết quả nhận dạng giữa ArcFace, FaceNet và LBPH.
+  </p>
 
   <form method="POST" enctype="multipart/form-data">
     <div class="upload-row">
       <div class="preview-box">
         {% if image_name %}
-          <img src="{{ url_for('static', filename='uploads/' + image_name) }}">
+        <img src="{{ url_for('static', filename='uploads/' + image_name) }}" />
         {% else %}Preview{% endif %}
       </div>
 
       <div>
-        <input type="file" name="image">
-        <br><br>
+        <input type="file" name="image" accept="image/*" />
+        <br /><br />
         <button class="btn">So sánh</button>
       </div>
     </div>
   </form>
 
   {% if result %}
-  <div class="result-box">
-    Model A: {{ result.a }}<br>
-    Model B: {{ result.b }}
+  <div class="result-box" style="margin-top: 30px">
+    <h3 style="margin-bottom: 15px">Kết quả so sánh</h3>
+    <table style="width: 100%; border-collapse: collapse">
+      <thead>
+        <tr style="background: #eef2ff">
+          <th
+            style="
+              padding: 12px;
+              text-align: left;
+              border-bottom: 2px solid #ddd;
+            "
+          >
+            Model
+          </th>
+          <th
+            style="
+              padding: 12px;
+              text-align: left;
+              border-bottom: 2px solid #ddd;
+            "
+          >
+            Kết quả
+          </th>
+          <th
+            style="
+              padding: 12px;
+              text-align: center;
+              border-bottom: 2px solid #ddd;
+            "
+          >
+            Trạng thái
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom: 1px solid #eee">
+          <td style="padding: 12px">
+            <b style="color: #2563eb">ArcFace</b><br /><small
+              >ResNet50 + Angular Margin</small
+            >
+          </td>
+          <td style="padding: 12px">{{ result.arcface }}</td>
+          <td style="padding: 12px; text-align: center">
+            {% if result.arcface_detail.status == 'success' %}
+            <span style="color: green">OK</span>
+            {% else %}
+            <span style="color: red">Error</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee">
+          <td style="padding: 12px">
+            <b style="color: #7c3aed">FaceNet</b><br /><small
+              >InceptionResNet + Triplet Loss</small
+            >
+          </td>
+          <td style="padding: 12px">{{ result.facenet }}</td>
+          <td style="padding: 12px; text-align: center">
+            {% if result.facenet_detail.status == 'success' %}
+            <span style="color: green">OK</span>
+            {% else %}
+            <span style="color: red">Error</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 12px">
+            <b style="color: #059669">LBPH</b><br /><small
+              >Local Binary Pattern Histogram</small
+            >
+          </td>
+          <td style="padding: 12px">{{ result.lbph }}</td>
+          <td style="padding: 12px; text-align: center">
+            {% if result.lbph_detail.status == 'success' %}
+            <span style="color: green">OK</span>
+            {% else %}
+            <span style="color: red">Error</span>
+            {% endif %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
   </div>
   {% endif %}
 </div>

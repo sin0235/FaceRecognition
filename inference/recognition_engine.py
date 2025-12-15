@@ -180,8 +180,10 @@ class RecognitionEngine:
         
         results = []
         for idx, score in zip(indices, scores):
-            if self.label_to_id:
-                name = self.label_to_id.get(idx, f"ID_{idx}")
+            if idx == -1:
+                continue
+            if self.id_to_label:
+                name = self.id_to_label.get(idx, f"ID_{idx}")
             else:
                 name = f"ID_{idx}"
             results.append((name, float(score)))

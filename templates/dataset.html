@@ -1,14 +1,76 @@
-{% extends "base.html" %}
-{% block content %}
+{% extends "base.html" %} {% block content %}
 
 <div class="card animate">
-  <h2>Dataset</h2>
-  <ul class="stats">
-    <li><b>Số lớp:</b> 10</li>
-    <li><b>Tổng ảnh:</b> 1,200</li>
-    <li><b>Train:</b> 1,000</li>
-    <li><b>Test:</b> 200</li>
-  </ul>
+  <h2>Dataset Information</h2>
+  <p class="subtitle">Thông tin về tập dữ liệu CelebA đã xử lý.</p>
+
+  <div
+    style="
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin-top: 20px;
+    "
+  >
+    <div
+      class="stats"
+      style="background: #f0f9ff; padding: 20px; border-radius: 12px"
+    >
+      <h3 style="color: #2563eb; margin-bottom: 15px">Ảnh đã Align</h3>
+      <ul style="list-style: none; padding: 0">
+        <li><b>Số lớp (người):</b> {{ info.aligned.classes }}</li>
+        <li><b>Tổng ảnh:</b> {{ info.aligned.images }}</li>
+      </ul>
+      {% if info.aligned.samples %}
+      <div style="margin-top: 15px">
+        <b>Mẫu các lớp:</b>
+        <ul style="font-size: 0.9em; margin-top: 8px">
+          {% for s in info.aligned.samples[:5] %}
+          <li>{{ s.class }}: {{ s.count }} ảnh</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+
+    <div
+      class="stats"
+      style="background: #fef3c7; padding: 20px; border-radius: 12px"
+    >
+      <h3 style="color: #d97706; margin-bottom: 15px">Ảnh gốc (chưa Align)</h3>
+      <ul style="list-style: none; padding: 0">
+        <li><b>Số lớp (người):</b> {{ info.original.classes }}</li>
+        <li><b>Tổng ảnh:</b> {{ info.original.images }}</li>
+      </ul>
+      {% if info.original.samples %}
+      <div style="margin-top: 15px">
+        <b>Mẫu các lớp:</b>
+        <ul style="font-size: 0.9em; margin-top: 8px">
+          {% for s in info.original.samples[:5] %}
+          <li>{{ s.class }}: {{ s.count }} ảnh</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div
+    style="
+      margin-top: 30px;
+      padding: 20px;
+      background: #f3f4f6;
+      border-radius: 12px;
+    "
+  >
+    <h3>Về Dataset CelebA</h3>
+    <ul style="line-height: 1.8; margin-top: 10px">
+      <li><b>Nguồn:</b> CelebFaces Attributes Dataset (CelebA)</li>
+      <li><b>Preprocessing:</b> MTCNN Face Detection + Alignment</li>
+      <li><b>Kích thước ảnh:</b> 112x112 (ArcFace), 160x160 (FaceNet)</li>
+      <li><b>Phân chia:</b> Train / Validation / Test</li>
+    </ul>
+  </div>
 </div>
 
 {% endblock %}

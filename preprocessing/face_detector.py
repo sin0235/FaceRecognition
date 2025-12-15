@@ -120,7 +120,7 @@ class FaceDetector:
         Detect face trong anh
         
         Args:
-            image: numpy array (BGR hoac RGB), shape (H, W, 3)
+            image: numpy array BGR format (tu cv2.imread), shape (H, W, 3)
             
         Returns:
             Dict chua:

@@ -1,31 +1,104 @@
-{% extends "base.html" %}
-{% block content %}
+{% extends "base.html" %} {% block content %}
 
 <div class="card animate">
-  <h2>Nhận diện khuôn mặt</h2>
-  <p class="subtitle">Upload ảnh để hệ thống dự đoán người nổi tiếng.</p>
+  <h2>Nhận dạng khuôn mặt</h2>
+  <p class="subtitle">
+    Upload ảnh để so sánh kết quả của 3 models + Grad-CAM visualization
+  </p>
 
   <form method="POST" enctype="multipart/form-data">
+    <div style="margin-bottom: 20px">
+      <label>Threshold: <b id="v">{{ threshold }}</b></label>
+      <input
+        type="range"
+        name="threshold"
+        min="0.3"
+        max="0.9"
+        step="0.05"
+        value="{{ threshold }}"
+        oninput="v.innerText=this.value"
+        style="width: 200px; margin-left: 10px"
+      />
+    </div>
+
     <div class="upload-row">
       <div class="preview-box">
         {% if image_name %}
-          <img src="{{ url_for('static', filename='uploads/' + image_name) }}">
-        {% else %}
-          Preview
-        {% endif %}
+        <img src="{{ url_for('static', filename='uploads/' + image_name) }}" />
+        {% else %}Preview{% endif %}
       </div>
 
       <div>
-        <input type="file" name="image" accept="image/*">
-        <br><br>
-        <button class="btn">Nhận diện</button>
+        <input type="file" name="image" accept="image/*" />
+        <br /><br />
+        <button class="btn">Nhận dạng</button>
       </div>
     </div>
   </form>
 
   {% if result %}
-  <div class="result-box">
-    <b>Kết quả:</b> {{ result }}
+  <div
+    style="
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin-top: 30px;
+    "
+  >
+    <!-- Kết quả 3 models -->
+    <div class="result-box">
+      <h3 style="margin-bottom: 15px">Kết quả 3 Models</h3>
+      <table style="width: 100%; border-collapse: collapse">
+        <tr style="border-bottom: 1px solid #eee">
+          <td style="padding: 10px"><b style="color: #2563eb">ArcFace</b></td>
+          <td style="padding: 10px">
+            {% if result.arcface.ok %}<span style="color: #22c55e"
+              >{{ result.arcface.text }}</span
+            >
+            {% else %}<span style="color: #ef4444"
+              >{{ result.arcface.text }}</span
+            >{% endif %}
+          </td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee">
+          <td style="padding: 10px"><b style="color: #7c3aed">FaceNet</b></td>
+          <td style="padding: 10px">
+            {% if result.facenet.ok %}<span style="color: #22c55e"
+              >{{ result.facenet.text }}</span
+            >
+            {% else %}<span style="color: #ef4444"
+              >{{ result.facenet.text }}</span
+            >{% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 10px"><b style="color: #059669">LBPH</b></td>
+          <td style="padding: 10px">
+            {% if result.lbph.ok %}<span style="color: #22c55e"
+              >{{ result.lbph.text }}</span
+            >
+            {% else %}<span style="color: #ef4444">{{ result.lbph.text }}</span
+            >{% endif %}
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Grad-CAM -->
+    <div class="result-box">
+      <h3 style="margin-bottom: 15px">Grad-CAM (ArcFace)</h3>
+      {% if gradcam_image %}
+      <img
+        src="{{ url_for('static', filename=gradcam_image) }}"
+        style="width: 100%; max-width: 250px; border-radius: 12px"
+      />
+      <p style="font-size: 0.85em; color: #666; margin-top: 10px">
+        Vùng màu đỏ = model tập trung khi nhận dạng
+      </p>
+      {% else %}
+      <p style="color: #888">Không thể tạo Grad-CAM</p>
+      {% endif %}
+    </div>
   </div>
   {% endif %}
 </div>

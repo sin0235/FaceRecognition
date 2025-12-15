@@ -1,22 +1,535 @@
-{% extends "base.html" %}
-{% block content %}
+{% extends "base.html" %} {% block content %}
 
 <div class="card animate">
-  <h2>Model Evaluation</h2>
+  <h2>Đánh giá Models</h2>
+
+  <!-- Tab buttons -->
+  <div
+    style="
+      display: flex;
+      gap: 10px;
+      margin-bottom: 30px;
+      border-bottom: 2px solid #eee;
+      padding-bottom: 15px;
+    "
+  >
+    <a
+      href="/evaluation?mode=kaggle"
+      class="btn"
+      style="{% if mode == 'kaggle' %}background:#2563eb{% else %}background:#94a3b8{% endif %}"
+    >
+      Kết quả từ Kaggle
+    </a>
+    <a
+      href="/evaluation?mode=demo"
+      class="btn"
+      style="{% if mode == 'demo' %}background:#2563eb{% else %}background:#94a3b8{% endif %}"
+    >
+      Demo từ Test Set
+    </a>
+  </div>
+
+  {% if mode == 'kaggle' %}
+  <!-- Kaggle Results -->
   <p class="subtitle">
-    Đánh giá tổng quan mô hình ArcFace trên tập dữ liệu kiểm thử.
+    Kết quả đánh giá trên Kaggle (notebook: evaluate_arcface.ipynb)
   </p>
 
-  <ul style="line-height:1.8">
-    <li><b>Ưu điểm:</b> ArcFace học được đặc trưng khuôn mặt mạnh, phân biệt tốt các lớp.</li>
-    <li><b>Hạn chế:</b> Hiệu năng phụ thuộc chất lượng ảnh và điều kiện ánh sáng.</li>
-    <li><b>Threshold:</b> Ảnh hưởng trực tiếp đến tỉ lệ false accept / false reject.</li>
-    <li><b>Explainability:</b> Grad-CAM cho thấy mô hình tập trung vào vùng mắt, mũi.</li>
-  </ul>
+  <!-- Accuracy Cards -->
+  <div
+    style="
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-top: 20px;
+    "
+  >
+    <div
+      style="
+        background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+        color: white;
+        padding: 25px;
+        border-radius: 16px;
+        text-align: center;
+      "
+    >
+      <h3 style="opacity: 0.9">ArcFace</h3>
+      <div style="font-size: 2em; font-weight: 700; margin: 10px 0">
+        {{ metrics.arcface.accuracy }}%
+      </div>
+      <small>Top-1 Accuracy</small>
+      <div style="font-size: 0.9em; margin-top: 8px; opacity: 0.85">
+        Top-5: {{ metrics.arcface.top5_accuracy }}%
+      </div>
+    </div>
+    <div
+      style="
+        background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+        color: white;
+        padding: 25px;
+        border-radius: 16px;
+        text-align: center;
+      "
+    >
+      <h3 style="opacity: 0.9">FaceNet</h3>
+      <div style="font-size: 2em; font-weight: 700; margin: 10px 0">
+        {{ metrics.facenet.accuracy }}%
+      </div>
+      <small>Top-1 Accuracy</small>
+      <div style="font-size: 0.9em; margin-top: 8px; opacity: 0.85">
+        Top-5: {{ metrics.facenet.top5_accuracy }}%
+      </div>
+    </div>
+    <div
+      style="
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        color: white;
+        padding: 25px;
+        border-radius: 16px;
+        text-align: center;
+      "
+    >
+      <h3 style="opacity: 0.9">LBPH</h3>
+      <div style="font-size: 2em; font-weight: 700; margin: 10px 0">
+        {{ metrics.lbph.accuracy }}%
+      </div>
+      <small>Top-1 Accuracy</small>
+      <div style="font-size: 0.9em; margin-top: 8px; opacity: 0.85">
+        Top-5: {{ metrics.lbph.top5_accuracy }}%
+      </div>
+    </div>
+  </div>
 
-  <p style="margin-top:16px;color:#6b7280">
-    *Kết quả đánh giá chi tiết sẽ được cập nhật khi pipeline inference hoàn chỉnh.*
-  </p>
+  <!-- Charts Section -->
+  <div
+    style="
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin-top: 40px;
+    "
+  >
+    <!-- Accuracy Chart -->
+    <div style="background: #f8fafc; padding: 20px; border-radius: 12px">
+      <h3 style="margin-bottom: 15px; text-align: center">
+        Accuracy Comparison
+      </h3>
+      <canvas id="accuracyChart" height="200"></canvas>
+    </div>
+
+    <!-- Classification Metrics Chart -->
+    <div style="background: #f8fafc; padding: 20px; border-radius: 12px">
+      <h3 style="margin-bottom: 15px; text-align: center">
+        Classification Metrics
+      </h3>
+      <canvas id="metricsChart" height="200"></canvas>
+    </div>
+  </div>
+
+  <div
+    style="
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin-top: 30px;
+    "
+  >
+    <!-- ROC/AUC Chart -->
+    <div style="background: #f8fafc; padding: 20px; border-radius: 12px">
+      <h3 style="margin-bottom: 15px; text-align: center">AUC-ROC & EER</h3>
+      <canvas id="aucChart" height="200"></canvas>
+    </div>
+
+    <!-- Performance Chart -->
+    <div style="background: #f8fafc; padding: 20px; border-radius: 12px">
+      <h3 style="margin-bottom: 15px; text-align: center">
+        Performance (Speed)
+      </h3>
+      <canvas id="performanceChart" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- Detailed Metrics Table -->
+  <div style="margin-top: 40px">
+    <h3 style="margin-bottom: 15px">Chi tiết Metrics (Kaggle Evaluation)</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.95em">
+      <thead>
+        <tr style="background: #f3f4f6">
+          <th style="padding: 12px; text-align: left">Metric</th>
+          <th style="padding: 12px; text-align: center; color: #2563eb">
+            ArcFace
+          </th>
+          <th style="padding: 12px; text-align: center; color: #7c3aed">
+            FaceNet
+          </th>
+          <th style="padding: 12px; text-align: center; color: #059669">
+            LBPH
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom: 1px solid #eee">
+          <td style="padding: 10px">Top-1 Accuracy</td>
+          <td style="text-align: center">
+            <b>{{ metrics.arcface.accuracy }}%</b>
+          </td>
+          <td style="text-align: center">{{ metrics.facenet.accuracy }}%</td>
+          <td style="text-align: center">{{ metrics.lbph.accuracy }}%</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee">
+          <td style="padding: 10px">Top-5 Accuracy</td>
+          <td style="text-align: center">
+            <b>{{ metrics.arcface.top5_accuracy }}%</b>
+          </td>
+          <td style="text-align: center">
+            {{ metrics.facenet.top5_accuracy }}%
+          </td>
+          <td style="text-align: center">{{ metrics.lbph.top5_accuracy }}%</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee">
+          <td style="padding: 10px">Precision</td>
+          <td style="text-align: center">{{ metrics.arcface.precision }}</td>
+          <td style="text-align: center">{{ metrics.facenet.precision }}</td>
+          <td style="text-align: center">{{ metrics.lbph.precision }}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee">
+          <td style="padding: 10px">Recall</td>
+          <td style="text-align: center">{{ metrics.arcface.recall }}</td>
+          <td style="text-align: center">{{ metrics.facenet.recall }}</td>
+          <td style="text-align: center">{{ metrics.lbph.recall }}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee">
+          <td style="padding: 10px">F1-Score</td>
+          <td style="text-align: center">{{ metrics.arcface.f1 }}</td>
+          <td style="text-align: center">{{ metrics.facenet.f1 }}</td>
+          <td style="text-align: center">{{ metrics.lbph.f1 }}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee">
+          <td style="padding: 10px">AUC (ROC)</td>
+          <td style="text-align: center"><b>{{ metrics.arcface.auc }}</b></td>
+          <td style="text-align: center">{{ metrics.facenet.auc }}</td>
+          <td style="text-align: center">{{ metrics.lbph.auc }}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee">
+          <td style="padding: 10px">EER (Equal Error Rate)</td>
+          <td style="text-align: center"><b>{{ metrics.arcface.eer }}</b></td>
+          <td style="text-align: center">{{ metrics.facenet.eer }}</td>
+          <td style="text-align: center">{{ metrics.lbph.eer }}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #eee">
+          <td style="padding: 10px">Latency (ms/image)</td>
+          <td style="text-align: center">{{ metrics.arcface.latency_ms }}</td>
+          <td style="text-align: center">{{ metrics.facenet.latency_ms }}</td>
+          <td style="text-align: center">
+            <b>{{ metrics.lbph.latency_ms }}</b>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 10px">Throughput (img/s)</td>
+          <td style="text-align: center">{{ metrics.arcface.throughput }}</td>
+          <td style="text-align: center">{{ metrics.facenet.throughput }}</td>
+          <td style="text-align: center">
+            <b>{{ metrics.lbph.throughput }}</b>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Analysis Section -->
+  <div
+    style="
+      margin-top: 40px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    "
+  >
+    <div
+      style="
+        background: #f0fdf4;
+        padding: 20px;
+        border-radius: 12px;
+        border-left: 4px solid #22c55e;
+      "
+    >
+      <h4 style="color: #16a34a; margin-bottom: 10px">Kết luận</h4>
+      <ul style="line-height: 1.8; font-size: 0.95em">
+        <li>
+          <b>ArcFace:</b> Accuracy cao nhất ({{ metrics.arcface.accuracy }}%),
+          AUC tốt nhất ({{ metrics.arcface.auc }})
+        </li>
+        <li><b>FaceNet:</b> Cân bằng accuracy và speed</li>
+        <li>
+          <b>LBPH:</b> Nhanh nhất ({{ metrics.lbph.throughput }} img/s) nhưng
+          accuracy thấp
+        </li>
+      </ul>
+    </div>
+    <div
+      style="
+        background: #fef3c7;
+        padding: 20px;
+        border-radius: 12px;
+        border-left: 4px solid #f59e0b;
+      "
+    >
+      <h4 style="color: #d97706; margin-bottom: 10px">Dataset Info</h4>
+      <ul style="line-height: 1.8; font-size: 0.95em">
+        <li>
+          <b>Aligned:</b> {{ info.aligned.classes }} classes, {{
+          info.aligned.images }} images
+        </li>
+        <li>
+          <b>Original:</b> {{ info.original.classes }} classes, {{
+          info.original.images }} images
+        </li>
+        <li><b>Source:</b> CelebA Dataset</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // Accuracy Comparison Chart
+    new Chart(document.getElementById('accuracyChart'), {
+      type: 'bar',
+      data: {
+        labels: ['ArcFace', 'FaceNet', 'LBPH'],
+        datasets: [{
+          label: 'Top-1 Accuracy',
+          data: [{{ metrics.arcface.accuracy }}, {{ metrics.facenet.accuracy }}, {{ metrics.lbph.accuracy }}],
+          backgroundColor: ['#2563eb', '#7c3aed', '#059669'],
+          borderRadius: 8
+        }, {
+          label: 'Top-5 Accuracy',
+          data: [{{ metrics.arcface.top5_accuracy }}, {{ metrics.facenet.top5_accuracy }}, {{ metrics.lbph.top5_accuracy }}],
+          backgroundColor: ['#93c5fd', '#c4b5fd', '#6ee7b7'],
+          borderRadius: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: { y: { beginAtZero: true, max: 100 } },
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+
+    // Classification Metrics Chart (Radar)
+    new Chart(document.getElementById('metricsChart'), {
+      type: 'radar',
+      data: {
+        labels: ['Precision', 'Recall', 'F1-Score'],
+        datasets: [{
+          label: 'ArcFace',
+          data: [{{ metrics.arcface.precision * 100 }}, {{ metrics.arcface.recall * 100 }}, {{ metrics.arcface.f1 * 100 }}],
+          borderColor: '#2563eb',
+          backgroundColor: 'rgba(37, 99, 235, 0.2)'
+        }, {
+          label: 'FaceNet',
+          data: [{{ metrics.facenet.precision * 100 }}, {{ metrics.facenet.recall * 100 }}, {{ metrics.facenet.f1 * 100 }}],
+          borderColor: '#7c3aed',
+          backgroundColor: 'rgba(124, 58, 237, 0.2)'
+        }, {
+          label: 'LBPH',
+          data: [{{ metrics.lbph.precision * 100 }}, {{ metrics.lbph.recall * 100 }}, {{ metrics.lbph.f1 * 100 }}],
+          borderColor: '#059669',
+          backgroundColor: 'rgba(5, 150, 105, 0.2)'
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: { r: { beginAtZero: true, max: 100 } },
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+
+    // AUC & EER Chart
+    new Chart(document.getElementById('aucChart'), {
+      type: 'bar',
+      data: {
+        labels: ['ArcFace', 'FaceNet', 'LBPH'],
+        datasets: [{
+          label: 'AUC (x100)',
+          data: [{{ metrics.arcface.auc * 100 }}, {{ metrics.facenet.auc * 100 }}, {{ metrics.lbph.auc * 100 }}],
+          backgroundColor: ['#2563eb', '#7c3aed', '#059669'],
+          borderRadius: 8
+        }, {
+          label: 'EER (x100, lower is better)',
+          data: [{{ metrics.arcface.eer * 100 }}, {{ metrics.facenet.eer * 100 }}, {{ metrics.lbph.eer * 100 }}],
+          backgroundColor: ['#ef4444', '#f97316', '#eab308'],
+          borderRadius: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: { y: { beginAtZero: true } },
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+
+    // Performance Chart
+    new Chart(document.getElementById('performanceChart'), {
+      type: 'bar',
+      data: {
+        labels: ['ArcFace', 'FaceNet', 'LBPH'],
+        datasets: [{
+          label: 'Throughput (img/s)',
+          data: [{{ metrics.arcface.throughput }}, {{ metrics.facenet.throughput }}, {{ metrics.lbph.throughput }}],
+          backgroundColor: ['#2563eb', '#7c3aed', '#059669'],
+          borderRadius: 8,
+          yAxisID: 'y'
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom' } },
+        scales: {
+          y: { beginAtZero: true, title: { display: true, text: 'Throughput (img/s)' } }
+        }
+      }
+    });
+  </script>
+
+  {% else %}
+  <!-- Demo Mode -->
+  <p class="subtitle">Demo đánh giá trực tiếp trên tập test</p>
+
+  <div
+    style="
+      background: #fef3c7;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+    "
+  >
+    <b>Dataset:</b> {{ info.aligned.classes }} lớp, {{ info.aligned.images }}
+    ảnh (aligned)
+  </div>
+
+  <form method="POST" action="/evaluation?mode=demo">
+    <button class="btn" type="submit">
+      Chạy Demo Evaluation (5 classes x 2 images)
+    </button>
+  </form>
+
+  {% if demo_results %}
+  <div style="margin-top: 30px">
+    <h3>Kết quả Demo</h3>
+
+    <div
+      style="
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 15px;
+        margin: 20px 0;
+      "
+    >
+      <div
+        style="
+          background: #dcfce7;
+          padding: 15px;
+          border-radius: 10px;
+          text-align: center;
+        "
+      >
+        <div style="font-size: 1.8em; font-weight: 700; color: #16a34a">
+          {{ demo_results.correct }}
+        </div>
+        <small>Correct</small>
+      </div>
+      <div
+        style="
+          background: #fee2e2;
+          padding: 15px;
+          border-radius: 10px;
+          text-align: center;
+        "
+      >
+        <div style="font-size: 1.8em; font-weight: 700; color: #dc2626">
+          {{ demo_results.wrong }}
+        </div>
+        <small>Wrong</small>
+      </div>
+      <div
+        style="
+          background: #dbeafe;
+          padding: 15px;
+          border-radius: 10px;
+          text-align: center;
+        "
+      >
+        <div style="font-size: 1.8em; font-weight: 700; color: #2563eb">
+          {{ "%.1f"|format(demo_results.accuracy) }}%
+        </div>
+        <small>Accuracy</small>
+      </div>
+    </div>
+
+    <!-- Demo Results Chart -->
+    <div style="max-width: 400px; margin: 20px auto">
+      <canvas id="demoChart"></canvas>
+    </div>
+
+    <table
+      style="
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9em;
+        margin-top: 20px;
+      "
+    >
+      <thead>
+        <tr style="background: #f3f4f6">
+          <th style="padding: 10px; text-align: left">Image</th>
+          <th style="padding: 10px; text-align: left">True Label</th>
+          <th style="padding: 10px; text-align: left">Predicted</th>
+          <th style="padding: 10px; text-align: center">Confidence</th>
+          <th style="padding: 10px; text-align: center">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in demo_results.samples %}
+        <tr
+          style="border-bottom:1px solid #eee; background:{% if s.correct %}#f0fdf4{% else %}#fef2f2{% endif %}"
+        >
+          <td style="padding: 8px">{{ s.image[:25] }}...</td>
+          <td style="padding: 8px">{{ s.true_label }}</td>
+          <td style="padding: 8px">{{ s.predicted }}</td>
+          <td style="padding: 8px; text-align: center">
+            {{ "%.2f"|format(s.confidence) }}
+          </td>
+          <td style="padding: 8px; text-align: center">
+            {% if s.correct %}<span style="color: #16a34a; font-size: 1.2em"
+              >✓</span
+            >{% else %}<span style="color: #dc2626; font-size: 1.2em">✗</span>{%
+            endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    new Chart(document.getElementById('demoChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Correct', 'Wrong'],
+        datasets: [{
+          data: [{{ demo_results.correct }}, {{ demo_results.wrong }}],
+          backgroundColor: ['#22c55e', '#ef4444']
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'bottom' },
+          title: { display: true, text: 'Demo Results' }
+        }
+      }
+    });
+  </script>
+  {% endif %} {% endif %}
 </div>
 
 {% endblock %}
