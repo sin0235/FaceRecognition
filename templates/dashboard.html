@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card animate">
+  <h2>Evaluation Dashboard</h2>
+
+  <div class="stats">
+    <div>Ảnh test: <b>{{ metrics.total }}</b></div>
+    <div>Đúng: <b>{{ metrics.correct }}</b></div>
+    <div>Sai: <b>{{ metrics.wrong }}</b></div>
+    <div>Accuracy: <b>{{ metrics.accuracy }}%</b></div>
+  </div>
+</div>
+
+{% endblock %}

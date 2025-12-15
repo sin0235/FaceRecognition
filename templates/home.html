@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card animate">
+  <h2>Nhận diện khuôn mặt</h2>
+  <p class="subtitle">Upload ảnh để hệ thống dự đoán người nổi tiếng.</p>
+
+  <form method="POST" enctype="multipart/form-data">
+    <div class="upload-row">
+      <div class="preview-box">
+        {% if image_name %}
+          <img src="{{ url_for('static', filename='uploads/' + image_name) }}">
+        {% else %}
+          Preview
+        {% endif %}
+      </div>
+
+      <div>
+        <input type="file" name="image" accept="image/*">
+        <br><br>
+        <button class="btn">Nhận diện</button>
+      </div>
+    </div>
+  </form>
+
+  {% if result %}
+  <div class="result-box">
+    <b>Kết quả:</b> {{ result }}
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

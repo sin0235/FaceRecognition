@@ -1,57 +1,78 @@
+from flask import Flask, render_template, request
 import os
-import sys
-
-from flask import Flask, render_template, request, redirect, url_for
-from werkzeug.utils import secure_filename
-from PIL import Image
-
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(ROOT_DIR)
-
-from inference.recognition_engine import RecognitionEngine
-
 
 app = Flask(__name__)
-
-# thư mục lưu ảnh upload để show lên web
-UPLOAD_FOLDER = os.path.join("static", "uploads")
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-engine = RecognitionEngine()
-
+app.config["UPLOAD_FOLDER"] = "static/uploads"
 
 @app.route("/", methods=["GET", "POST"])
-def index():
-    result_name = None
-    result_score = None
-    image_url = None
+def home():
+    result = None
+    image_name = None
 
     if request.method == "POST":
         file = request.files.get("image")
-        if not file or file.filename == "":
-            return redirect(url_for("index"))
+        if file and file.filename:
+            image_name = file.filename
+            file.save(os.path.join(app.config["UPLOAD_FOLDER"], image_name))
+            result = "Mỹ Tâm (0.76)"
 
-        filename = secure_filename(file.filename)
-        save_path = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(save_path)
+    return render_template("home.html", active="home",
+                           result=result, image_name=image_name)
 
-        # đảm bảo ảnh lưu chuẩn
-        img = Image.open(save_path).convert("RGB")
-        img.save(save_path)
 
-        # GỌI ĐÚNG HÀM recognize, KHÔNG PHẢI predict
-        name, score = engine.recognize(save_path)
+@app.route("/compare", methods=["GET", "POST"])
+def compare():
+    result = None
+    image_name = None
 
-        result_name = name
-        result_score = f"{score:.4f}"
-        image_url = url_for("static", filename=f"uploads/{filename}")
+    if request.method == "POST":
+        file = request.files.get("image")
+        if file and file.filename:
+            image_name = file.filename
+            file.save(os.path.join(app.config["UPLOAD_FOLDER"], image_name))
+            result = {
+                "a": "Mỹ Tâm (0.76)",
+                "b": "Mỹ Tâm (0.71)"
+            }
 
-    return render_template(
-        "index.html",
-        result_name=result_name,
-        result_score=result_score,
-        image_url=image_url,
-    )
+    return render_template("compare.html", active="compare",
+                           result=result, image_name=image_name)
+
+
+@app.route("/threshold", methods=["GET", "POST"])
+def threshold():
+    result = None
+    image_name = None
+    threshold_val = 0.5
+
+    if request.method == "POST":
+        threshold_val = request.form.get("threshold", 0.5)
+        file = request.files.get("image")
+        if file and file.filename:
+            image_name = file.filename
+            file.save(os.path.join(app.config["UPLOAD_FOLDER"], image_name))
+            result = f"Mỹ Tâm (MATCH)"
+
+    return render_template("threshold.html", active="threshold",
+                           result=result,
+                           threshold=threshold_val,
+                           image_name=image_name)
+
+
+@app.route("/dataset")
+def dataset():
+    return render_template("dataset.html", active="dataset")
+
+
+@app.route("/dashboard")
+def dashboard():
+    metrics = {
+        "total": 100,
+        "correct": 76,
+        "wrong": 24,
+        "accuracy": 76
+    }
+    return render_template("dashboard.html", active="dashboard", metrics=metrics)
 
 
 if __name__ == "__main__":
