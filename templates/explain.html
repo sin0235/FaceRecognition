@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card animate">
+  <h2>Explainability – Grad-CAM</h2>
+  <p class="subtitle">
+    Grad-CAM giúp trực quan hóa vùng khuôn mặt mà mô hình tập trung
+    khi thực hiện nhận diện.
+  </p>
+
+  <form method="POST" enctype="multipart/form-data">
+    <input type="file" name="image" accept="image/*">
+    <br><br>
+    <button class="btn">Generate Grad-CAM</button>
+  </form>
+
+  {% if image_name %}
+  <div style="display:flex; gap:30px; margin-top:30px">
+    <div>
+      <b>Ảnh gốc</b><br>
+      <img src="{{ url_for('static', filename='uploads/' + image_name) }}"
+           style="width:220px; border-radius:12px; margin-top:10px">
+    </div>
+
+    <div>
+      <b>Grad-CAM</b><br>
+      <img src="{{ url_for('static', filename=gradcam_image) }}"
+           style="width:220px; border-radius:12px; margin-top:10px">
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
