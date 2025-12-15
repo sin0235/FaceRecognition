@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card">
+  <h2>Nhận diện khuôn mặt</h2>
+
+  <form method="post" enctype="multipart/form-data">
+    <input type="file" name="image" required>
+    <button>Nhận diện</button>
+  </form>
+
+  {% if result %}
+    <p><b>Kết quả:</b> {{ result.name }} ({{ result.confidence }})</p>
+  {% endif %}
+</div>
+{% endblock %}

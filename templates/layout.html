@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Celebrity Face Recognition</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">
+    <img src="{{ url_for('static', filename='img/logo.png') }}">
+    <div>
+      <h3>TRƯỜNG ĐH SƯ PHẠM KỸ THUẬT TP.HCM</h3>
+      <p>Faculty of Information Technology</p>
+    </div>
+  </div>
+
+  <nav>
+    <a href="/" class="{{ 'active' if active=='home' else '' }}">Trang chủ</a>
+    <a href="/detect" class="{{ 'active' if active=='detect' else '' }}">Nhận diện</a>
+    <a href="/compare" class="{{ 'active' if active=='compare' else '' }}">So sánh model</a>
+    <a href="/threshold" class="{{ 'active' if active=='threshold' else '' }}">Threshold</a>
+    <a href="/dataset" class="{{ 'active' if active=='dataset' else '' }}">Dataset</a>
+    <a href="/dashboard" class="{{ 'active' if active=='dashboard' else '' }}">Dashboard</a>
+  </nav>
+</header>
+
+<main class="container">
+  {% block content %}{% endblock %}
+</main>
+
+<footer>
+  Member Nguyễn Khang · Backend integration & UI
+</footer>
+
+</body>
+</html>
