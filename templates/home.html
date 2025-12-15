@@ -37,62 +37,200 @@
   </form>
 
   {% if result %}
-  <div
-    style="
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 30px;
-      margin-top: 30px;
-    "
-  >
-    <!-- Kết quả 3 models -->
-    <div class="result-box">
-      <h3 style="margin-bottom: 15px">Kết quả 3 Models</h3>
-      <table style="width: 100%; border-collapse: collapse">
-        <tr style="border-bottom: 1px solid #eee">
-          <td style="padding: 10px"><b style="color: #2563eb">ArcFace</b></td>
-          <td style="padding: 10px">
-            {% if result.arcface.ok %}<span style="color: #22c55e"
-              >{{ result.arcface.text }}</span
-            >
-            {% else %}<span style="color: #ef4444"
-              >{{ result.arcface.text }}</span
-            >{% endif %}
-          </td>
-        </tr>
-        <tr style="border-bottom: 1px solid #eee">
-          <td style="padding: 10px"><b style="color: #7c3aed">FaceNet</b></td>
-          <td style="padding: 10px">
-            {% if result.facenet.ok %}<span style="color: #22c55e"
-              >{{ result.facenet.text }}</span
-            >
-            {% else %}<span style="color: #ef4444"
-              >{{ result.facenet.text }}</span
-            >{% endif %}
-          </td>
-        </tr>
-        <tr>
-          <td style="padding: 10px"><b style="color: #059669">LBPH</b></td>
-          <td style="padding: 10px">
-            {% if result.lbph.ok %}<span style="color: #22c55e"
-              >{{ result.lbph.text }}</span
-            >
-            {% else %}<span style="color: #ef4444">{{ result.lbph.text }}</span
-            >{% endif %}
-          </td>
-        </tr>
-      </table>
+  <!-- Bảng so sánh chi tiết 3 Models -->
+  <div class="comparison-section" style="margin-top: 35px">
+    <h3 style="margin-bottom: 20px; font-size: 20px; color: #1e3a5f">So sánh chi tiết 3 Models</h3>
+    
+    <div class="model-cards" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px">
+      
+      <!-- ArcFace Card -->
+      <div class="model-card" style="background: linear-gradient(135deg, #eef4ff, #dbeafe); border-radius: 16px; padding: 20px; border-left: 4px solid #2563eb">
+        <div style="display: flex; align-items: center; margin-bottom: 15px">
+          <div style="width: 40px; height: 40px; background: #2563eb; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-right: 12px">
+            <span style="color: white; font-weight: bold; font-size: 14px">AF</span>
+          </div>
+          <div>
+            <h4 style="margin: 0; color: #2563eb; font-size: 16px">ArcFace</h4>
+            <span style="font-size: 11px; color: #6b7280">ResNet50 + Angular Margin</span>
+          </div>
+        </div>
+
+        <!-- Status -->
+        <div style="margin-bottom: 12px">
+          {% if result.arcface.ok %}
+          <span style="background: #dcfce7; color: #16a34a; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500">Success</span>
+          {% else %}
+          <span style="background: #fee2e2; color: #dc2626; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500">Error</span>
+          {% endif %}
+        </div>
+
+        <!-- Metrics -->
+        <div class="metrics" style="background: white; border-radius: 10px; padding: 12px">
+          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f1f5f9">
+            <span style="color: #6b7280; font-size: 13px">Danh tính</span>
+            <span style="font-weight: 600; color: {% if result.arcface.ok %}#2563eb{% else %}#dc2626{% endif %}; font-size: 13px">{{ result.arcface.detail.identity }}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f1f5f9">
+            <span style="color: #6b7280; font-size: 13px">Confidence</span>
+            <span style="font-weight: 600; font-size: 13px">{{ "%.2f"|format(result.arcface.detail.confidence) }}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f1f5f9">
+            <span style="color: #6b7280; font-size: 13px">Thời gian</span>
+            <span style="font-weight: 600; color: #059669; font-size: 13px">{{ result.arcface.detail.time_ms|default(0) }} ms</span>
+          </div>
+          {% if result.arcface.detail.top_k %}
+          <div style="padding: 8px 0 0 0">
+            <span style="color: #6b7280; font-size: 12px; display: block; margin-bottom: 6px">Top-5 Matches:</span>
+            {% for item in result.arcface.detail.top_k[:3] %}
+            <div style="display: flex; justify-content: space-between; font-size: 11px; padding: 2px 0">
+              <span style="color: #374151">{{ item[0][:15] }}{% if item[0]|length > 15 %}...{% endif %}</span>
+              <span style="color: #6b7280">{{ "%.3f"|format(item[1]) }}</span>
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+
+        <!-- Confidence Bar -->
+        <div style="margin-top: 12px">
+          <div style="background: #e2e8f0; border-radius: 8px; height: 8px; overflow: hidden">
+            <div style="background: linear-gradient(90deg, #2563eb, #1d4ed8); height: 100%; width: {{ (result.arcface.detail.confidence * 100)|int }}%; transition: width 0.5s"></div>
+          </div>
+          <span style="font-size: 11px; color: #6b7280">{{ (result.arcface.detail.confidence * 100)|round(1) }}% confidence</span>
+        </div>
+      </div>
+
+      <!-- FaceNet Card -->
+      <div class="model-card" style="background: linear-gradient(135deg, #f5f3ff, #ede9fe); border-radius: 16px; padding: 20px; border-left: 4px solid #7c3aed">
+        <div style="display: flex; align-items: center; margin-bottom: 15px">
+          <div style="width: 40px; height: 40px; background: #7c3aed; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-right: 12px">
+            <span style="color: white; font-weight: bold; font-size: 14px">FN</span>
+          </div>
+          <div>
+            <h4 style="margin: 0; color: #7c3aed; font-size: 16px">FaceNet</h4>
+            <span style="font-size: 11px; color: #6b7280">InceptionResNet + Triplet Loss</span>
+          </div>
+        </div>
+
+        <!-- Status -->
+        <div style="margin-bottom: 12px">
+          {% if result.facenet.ok %}
+          <span style="background: #dcfce7; color: #16a34a; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500">Success</span>
+          {% else %}
+          <span style="background: #fee2e2; color: #dc2626; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500">Error</span>
+          {% endif %}
+        </div>
+
+        <!-- Metrics -->
+        <div class="metrics" style="background: white; border-radius: 10px; padding: 12px">
+          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f1f5f9">
+            <span style="color: #6b7280; font-size: 13px">Danh tính</span>
+            <span style="font-weight: 600; color: {% if result.facenet.ok %}#7c3aed{% else %}#dc2626{% endif %}; font-size: 13px">{{ result.facenet.detail.identity }}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f1f5f9">
+            <span style="color: #6b7280; font-size: 13px">Similarity</span>
+            <span style="font-weight: 600; font-size: 13px">{{ "%.2f"|format(result.facenet.detail.confidence) }}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f1f5f9">
+            <span style="color: #6b7280; font-size: 13px">Distance</span>
+            <span style="font-weight: 600; color: #f59e0b; font-size: 13px">{{ "%.3f"|format(result.facenet.detail.distance|default(0)) }}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f1f5f9">
+            <span style="color: #6b7280; font-size: 13px">Thời gian</span>
+            <span style="font-weight: 600; color: #059669; font-size: 13px">{{ result.facenet.detail.time_ms|default(0) }} ms</span>
+          </div>
+          {% if result.facenet.detail.top_k %}
+          <div style="padding: 8px 0 0 0">
+            <span style="color: #6b7280; font-size: 12px; display: block; margin-bottom: 6px">Top-5 Matches:</span>
+            {% for item in result.facenet.detail.top_k[:3] %}
+            <div style="display: flex; justify-content: space-between; font-size: 11px; padding: 2px 0">
+              <span style="color: #374151">{{ item[0][:15] }}{% if item[0]|length > 15 %}...{% endif %}</span>
+              <span style="color: #6b7280">{{ "%.3f"|format(item[1]) }}</span>
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+
+        <!-- Confidence Bar -->
+        <div style="margin-top: 12px">
+          <div style="background: #e2e8f0; border-radius: 8px; height: 8px; overflow: hidden">
+            <div style="background: linear-gradient(90deg, #7c3aed, #6d28d9); height: 100%; width: {{ (result.facenet.detail.confidence * 100)|int }}%; transition: width 0.5s"></div>
+          </div>
+          <span style="font-size: 11px; color: #6b7280">{{ (result.facenet.detail.confidence * 100)|round(1) }}% similarity</span>
+        </div>
+      </div>
+
+      <!-- LBPH Card -->
+      <div class="model-card" style="background: linear-gradient(135deg, #ecfdf5, #d1fae5); border-radius: 16px; padding: 20px; border-left: 4px solid #059669">
+        <div style="display: flex; align-items: center; margin-bottom: 15px">
+          <div style="width: 40px; height: 40px; background: #059669; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-right: 12px">
+            <span style="color: white; font-weight: bold; font-size: 14px">LB</span>
+          </div>
+          <div>
+            <h4 style="margin: 0; color: #059669; font-size: 16px">LBPH</h4>
+            <span style="font-size: 11px; color: #6b7280">Local Binary Pattern Histogram</span>
+          </div>
+        </div>
+
+        <!-- Status -->
+        <div style="margin-bottom: 12px">
+          {% if result.lbph.ok %}
+          <span style="background: #dcfce7; color: #16a34a; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500">Success</span>
+          {% else %}
+          <span style="background: #fee2e2; color: #dc2626; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500">Error</span>
+          {% endif %}
+        </div>
+
+        <!-- Metrics -->
+        <div class="metrics" style="background: white; border-radius: 10px; padding: 12px">
+          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f1f5f9">
+            <span style="color: #6b7280; font-size: 13px">Danh tính</span>
+            <span style="font-weight: 600; color: {% if result.lbph.ok %}#059669{% else %}#dc2626{% endif %}; font-size: 13px">{{ result.lbph.detail.identity }}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f1f5f9">
+            <span style="color: #6b7280; font-size: 13px">Confidence</span>
+            <span style="font-weight: 600; font-size: 13px">{{ "%.2f"|format(result.lbph.detail.confidence) }}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f1f5f9">
+            <span style="color: #6b7280; font-size: 13px">Distance</span>
+            <span style="font-weight: 600; color: #f59e0b; font-size: 13px">{{ "%.2f"|format(result.lbph.detail.distance|default(0)) }}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 6px 0">
+            <span style="color: #6b7280; font-size: 13px">Thời gian</span>
+            <span style="font-weight: 600; color: #059669; font-size: 13px">{{ result.lbph.detail.time_ms|default(0) }} ms</span>
+          </div>
+        </div>
+
+        <!-- Confidence Bar -->
+        <div style="margin-top: 12px">
+          <div style="background: #e2e8f0; border-radius: 8px; height: 8px; overflow: hidden">
+            <div style="background: linear-gradient(90deg, #059669, #047857); height: 100%; width: {{ (result.lbph.detail.confidence * 100)|int }}%; transition: width 0.5s"></div>
+          </div>
+          <span style="font-size: 11px; color: #6b7280">{{ (result.lbph.detail.confidence * 100)|round(1) }}% confidence</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Performance Comparison Chart + Grad-CAM -->
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-top: 30px">
+    
+    <!-- Performance Chart -->
+    <div class="result-box" style="padding: 20px">
+      <h3 style="margin-bottom: 15px; font-size: 16px">So sánh hiệu suất</h3>
+      <canvas id="performanceChart" height="200"></canvas>
     </div>
 
     <!-- Grad-CAM -->
-    <div class="result-box">
-      <h3 style="margin-bottom: 15px">Grad-CAM (ArcFace)</h3>
+    <div class="result-box" style="padding: 20px">
+      <h3 style="margin-bottom: 15px; font-size: 16px">Grad-CAM (ArcFace)</h3>
       {% if gradcam_image %}
       <img
         src="{{ url_for('static', filename=gradcam_image) }}"
-        style="width: 100%; max-width: 250px; border-radius: 12px"
+        style="width: 100%; max-width: 220px; border-radius: 12px"
       />
-      <p style="font-size: 0.85em; color: #666; margin-top: 10px">
+      <p style="font-size: 0.8em; color: #666; margin-top: 10px">
         Vùng màu đỏ = model tập trung khi nhận dạng
       </p>
       {% else %}
@@ -100,6 +238,91 @@
       {% endif %}
     </div>
   </div>
+
+  <!-- Summary Table -->
+  <div class="result-box" style="margin-top: 25px; padding: 20px">
+    <h3 style="margin-bottom: 15px; font-size: 16px">Bảng tổng hợp</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px">
+      <thead>
+        <tr style="background: linear-gradient(135deg, #f8fafc, #f1f5f9)">
+          <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0; font-weight: 600">Model</th>
+          <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e2e8f0; font-weight: 600">Danh tính</th>
+          <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e2e8f0; font-weight: 600">Confidence</th>
+          <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e2e8f0; font-weight: 600">Distance</th>
+          <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e2e8f0; font-weight: 600">Thời gian</th>
+          <th style="padding: 12px; text-align: center; border-bottom: 2px solid #e2e8f0; font-weight: 600">Trạng thái</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom: 1px solid #f1f5f9">
+          <td style="padding: 12px"><b style="color: #2563eb">ArcFace</b></td>
+          <td style="padding: 12px; text-align: center">{{ result.arcface.detail.identity }}</td>
+          <td style="padding: 12px; text-align: center">{{ "%.3f"|format(result.arcface.detail.confidence) }}</td>
+          <td style="padding: 12px; text-align: center; color: #6b7280">-</td>
+          <td style="padding: 12px; text-align: center; color: #059669">{{ result.arcface.detail.time_ms|default(0) }}ms</td>
+          <td style="padding: 12px; text-align: center">{% if result.arcface.ok %}<span style="color: #16a34a">OK</span>{% else %}<span style="color: #dc2626">Err</span>{% endif %}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #f1f5f9">
+          <td style="padding: 12px"><b style="color: #7c3aed">FaceNet</b></td>
+          <td style="padding: 12px; text-align: center">{{ result.facenet.detail.identity }}</td>
+          <td style="padding: 12px; text-align: center">{{ "%.3f"|format(result.facenet.detail.confidence) }}</td>
+          <td style="padding: 12px; text-align: center; color: #f59e0b">{{ "%.3f"|format(result.facenet.detail.distance|default(0)) }}</td>
+          <td style="padding: 12px; text-align: center; color: #059669">{{ result.facenet.detail.time_ms|default(0) }}ms</td>
+          <td style="padding: 12px; text-align: center">{% if result.facenet.ok %}<span style="color: #16a34a">OK</span>{% else %}<span style="color: #dc2626">Err</span>{% endif %}</td>
+        </tr>
+        <tr>
+          <td style="padding: 12px"><b style="color: #059669">LBPH</b></td>
+          <td style="padding: 12px; text-align: center">{{ result.lbph.detail.identity }}</td>
+          <td style="padding: 12px; text-align: center">{{ "%.3f"|format(result.lbph.detail.confidence) }}</td>
+          <td style="padding: 12px; text-align: center; color: #f59e0b">{{ "%.2f"|format(result.lbph.detail.distance|default(0)) }}</td>
+          <td style="padding: 12px; text-align: center; color: #059669">{{ result.lbph.detail.time_ms|default(0) }}ms</td>
+          <td style="padding: 12px; text-align: center">{% if result.lbph.ok %}<span style="color: #16a34a">OK</span>{% else %}<span style="color: #dc2626">Err</span>{% endif %}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    const ctx = document.getElementById('performanceChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Confidence', 'Thời gian (ms/10)'],
+        datasets: [
+          {
+            label: 'ArcFace',
+            data: [{{ (result.arcface.detail.confidence * 100)|round(1) }}, {{ (result.arcface.detail.time_ms|default(0)) / 10 }}],
+            backgroundColor: 'rgba(37, 99, 235, 0.7)',
+            borderColor: 'rgba(37, 99, 235, 1)',
+            borderWidth: 1
+          },
+          {
+            label: 'FaceNet',
+            data: [{{ (result.facenet.detail.confidence * 100)|round(1) }}, {{ (result.facenet.detail.time_ms|default(0)) / 10 }}],
+            backgroundColor: 'rgba(124, 58, 237, 0.7)',
+            borderColor: 'rgba(124, 58, 237, 1)',
+            borderWidth: 1
+          },
+          {
+            label: 'LBPH',
+            data: [{{ (result.lbph.detail.confidence * 100)|round(1) }}, {{ (result.lbph.detail.time_ms|default(0)) / 10 }}],
+            backgroundColor: 'rgba(5, 150, 105, 0.7)',
+            borderColor: 'rgba(5, 150, 105, 1)',
+            borderWidth: 1
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'bottom' }
+        },
+        scales: {
+          y: { beginAtZero: true, max: 100 }
+        }
+      }
+    });
+  </script>
   {% endif %}
 </div>
 

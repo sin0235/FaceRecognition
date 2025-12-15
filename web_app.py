@@ -15,6 +15,7 @@ import tempfile
 import uuid
 import atexit
 import shutil
+import time
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT_DIR)
@@ -162,17 +163,21 @@ def get_explainability_engine():
 
 
 def recognize_with_arcface(image_path, threshold=0.5):
+    start_time = time.time()
     engine = get_arcface_engine()
     if engine is None:
-        return {"identity": "Model not loaded", "confidence": 0.0, "status": "error"}
+        return {"identity": "Model not loaded", "confidence": 0.0, "status": "error", "time_ms": 0}
     engine.set_threshold(threshold)
-    return engine.recognize(image_path)
+    result = engine.recognize(image_path)
+    result["time_ms"] = round((time.time() - start_time) * 1000, 2)
+    return result
 
 
 def recognize_with_facenet(image_path, threshold=0.5):
+    start_time = time.time()
     engine = get_facenet_engine()
     if engine is None:
-        return {"identity": "Model not loaded", "confidence": 0.0, "status": "error"}
+        return {"identity": "Model not loaded", "confidence": 0.0, "status": "error", "time_ms": 0}
     
     try:
         img = Image.open(image_path).convert('RGB')
@@ -182,32 +187,36 @@ def recognize_with_facenet(image_path, threshold=0.5):
             embedding = engine['model'](input_tensor).cpu().numpy().flatten()
         
         if engine['db'] is None:
-            return {"identity": "No database", "confidence": 0.0, "status": "error"}
+            return {"identity": "No database", "confidence": 0.0, "status": "error", "time_ms": round((time.time() - start_time) * 1000, 2)}
         
         top_k = []
         for name, db_emb in engine['db'].items():
             score = np.dot(embedding, db_emb.flatten()) / (np.linalg.norm(embedding) * np.linalg.norm(db_emb) + 1e-8)
-            top_k.append((name, float(score)))
+            distance = np.linalg.norm(embedding - db_emb.flatten())
+            top_k.append((name, float(score), float(distance)))
         top_k.sort(key=lambda x: x[1], reverse=True)
         
-        best_name, best_score = top_k[0] if top_k else ("Unknown", 0.0)
+        best_name, best_score = top_k[0][0], top_k[0][1] if top_k else ("Unknown", 0.0)
+        best_distance = top_k[0][2] if top_k else 0.0
         if best_score < threshold:
             best_name = "Unknown"
         
-        return {"identity": best_name, "confidence": best_score, "top_k": top_k[:5], "status": "success"}
+        elapsed = round((time.time() - start_time) * 1000, 2)
+        return {"identity": best_name, "confidence": best_score, "distance": best_distance, "top_k": top_k[:5], "status": "success", "time_ms": elapsed}
     except Exception as e:
-        return {"identity": str(e), "confidence": 0.0, "status": "error"}
+        return {"identity": str(e), "confidence": 0.0, "status": "error", "time_ms": round((time.time() - start_time) * 1000, 2)}
 
 
 def recognize_with_lbph(image_path, threshold=80):
+    start_time = time.time()
     model = get_lbph_model()
     if model is None:
-        return {"identity": "Model not loaded", "confidence": 0.0, "status": "error"}
+        return {"identity": "Model not loaded", "confidence": 0.0, "status": "error", "time_ms": 0}
     
     try:
         img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
         if img is None:
-            return {"identity": "Cannot read image", "confidence": 0.0, "status": "error"}
+            return {"identity": "Cannot read image", "confidence": 0.0, "status": "error", "time_ms": 0}
         
         img = cv2.resize(img, (100, 100))
         label, distance = model.predict(img)
@@ -217,9 +226,10 @@ def recognize_with_lbph(image_path, threshold=80):
         if distance > threshold:
             identity = "Unknown"
         
-        return {"identity": identity, "confidence": float(confidence), "status": "success"}
+        elapsed = round((time.time() - start_time) * 1000, 2)
+        return {"identity": identity, "confidence": float(confidence), "distance": float(distance), "status": "success", "time_ms": elapsed}
     except Exception as e:
-        return {"identity": str(e), "confidence": 0.0, "status": "error"}
+        return {"identity": str(e), "confidence": 0.0, "status": "error", "time_ms": round((time.time() - start_time) * 1000, 2)}
 
 
 def get_test_data_info():
