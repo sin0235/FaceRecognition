@@ -1,91 +1,118 @@
-# Config ArcFace Training cho Kaggle
-# Toi uu hoa cho GPU 16GB (P100/T4) voi nhieu classes (9000+)
+# Cau hinh ArcFace Training
+# Ho tro: Early Stopping + Learning Rate Scheduling
+# Toi uu cho nhieu classes (9000+)
 
 # Model Architecture
 model:
   backbone: resnet50
   embedding_size: 512
   pretrained: true
-  freeze_ratio: 0.0 # KHONG dong bang - can train full backbone
+  freeze_ratio: 0.5 # KHONG dong bang backbone de hoc tot hon
 
-# ArcFace Loss - DIEU CHINH CHO NHIEU CLASSES
+# ArcFace Loss - QUAN TRONG: dieu chinh cho so luong classes
 arcface:
-  margin: 0.15 # Giam manh tu 0.35 - bat dau nho roi tang dan
-  scale: 64.0 # Tang tu 30 len 64 (gia tri paper goc)
-  easy_margin: true # Bat easy_margin de de hoi tu hon
+  margin: 0.1 # Bat dau nho, tang dan khi model hoi tu
+  scale: 64.0 # Gia tri paper goc
+  easy_margin: true # De hoi tu hon voi nhieu classes
 
-# Training Configuration - toi uu cho Kaggle
+# Training Configuration
 training:
   num_epochs: 50
   batch_size: 128
   num_workers: 4
 
+  # Warmup (quan trong cho ArcFace voi nhieu classes)
   warmup:
-    enabled: false # Tat warmup khi resume
-    epochs: 5
-    start_lr: 0.00001
+    enabled: true
+    epochs: 5 # So epochs warmup
+    start_lr: 0.00001 # Bat dau rat thap
 
+  # Optimizer: sgd, adam, adamw
   optimizer:
     type: sgd
-    lr: 0.0001 # LR moi khi resume - khong qua cao de tranh pha model
+    lr: 0.01 # LR cao theo paper ArcFace
     momentum: 0.9
     weight_decay: 0.0005
 
+  # Learning Rate Scheduler
   scheduler:
-    type: step
-    step_size: 20 # Giam LR moi 20 epochs
-    gamma: 0.5 # Giam nhe hon (0.5 thay vi 0.1)
-    eta_min: 0.0001 # Khong giam duoi 1e-04
+    type: step # Step scheduler on dinh hon
+    step_size: 15 # Giam LR moi 10 epochs
+    gamma: 0.5 # Nhan LR voi 0.1
+    eta_min: 0.00001
 
+  # Gradient Clipping
   grad_clip:
     enabled: true
     max_norm: 5.0
 
+  # Early Stopping - theo doi LOSS thay vi accuracy
   early_stopping:
     enabled: true
-    patience: 15 # Tang patience vi can nhieu epochs hon
-    min_delta: 0.0001 # Giam threshold
+    patience: 15 # Tang patience
+    min_delta: 0.001
+    mode: min # Theo doi loss (min) thay vi accuracy (max)
 
 # Data Configuration
 data:
-  mode: folder # Khong can CSV metadata
+  # Mode: 'csv' (can file metadata) hoac 'folder' (khong can metadata)
+  mode: folder
 
-  # Paths (se bi override boi --data_dir)
-  train_data_root: data/train
-  val_data_root: data/val
+  # Paths cho mode 'csv'
+  train_csv: data/CelebA_Aligned_Balanced/metadata/train_labels.csv
+  val_csv: data/CelebA_Aligned_Balanced/metadata/val_labels.csv
 
-  # CSV paths (chi dung khi mode: csv)
-  train_csv: data/metadata/train_labels.csv
-  val_csv: data/metadata/val_labels.csv
+  # Paths cho ca 2 mode
+  train_data_root: data/CelebA_Aligned_Balanced/train
+  val_data_root: data/CelebA_Aligned_Balanced/val
 
+  # Filtering (chi ap dung cho mode 'folder')
   min_images_per_identity: 5
+
+  # Class balancing
   class_balanced_sampling: true
-  augment_strength: normal
+  augment_strength: strong # light, normal, strong
+
+  # Image settings
   image_size: 112
 
+  # Augmentation (cho online augmentation khi training)
+  augmentation:
+    horizontal_flip: 0.5
+    rotation_degrees: 10
+    color_jitter:
+      brightness: 0.2
+      contrast: 0.2
+      saturation: 0.1
+      hue: 0.05
+
+  # Normalization
   normalize:
     mean: [0.5, 0.5, 0.5]
     std: [0.5, 0.5, 0.5]
 
 # Checkpointing
 checkpoint:
-  save_dir: /kaggle/working/checkpoints/arcface
+  save_dir: models/checkpoints/arcface
   save_best: true
-  save_interval: 1
-  keep_last_n: 2 # Giam de tiet kiem dung luong
+  save_interval: 1 # Luu moi epoch (quan trong cho Colab 12h limit)
+  keep_last_n: 3 # Chi giu 3 checkpoints gan nhat de tiet kiem dung luong
 
 # Logging
 logging:
-  use_tensorboard: false # Tat TensorBoard tren Kaggle
-  log_dir: /kaggle/working/logs/arcface
-  log_interval: 50
+  use_tensorboard: true
+  log_dir: logs/arcface
+  log_interval: 100
 
   embedding_vis:
-    enabled: false # Tat t-SNE de tiet kiem thoi gian
+    enabled: true
+    interval: 5
+    num_samples: 1000
 
 # Device
 device: cuda
 
-# Mixed Precision - bat de tang toc
+# Mixed Precision Training (FP16) - tang toc 2-3x tren GPU
 mixed_precision:
-  enabled: true
+  enabled: true # Bat FP16 de tang toc training
+  opt_level: "O1" # O1: mixed, O2: almost FP16

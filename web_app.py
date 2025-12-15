@@ -29,11 +29,39 @@ os.makedirs(app.config["TEMP_FOLDER"], exist_ok=True)
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 os.makedirs(app.config["GRADCAM_FOLDER"], exist_ok=True)
 
+MAX_FILE_AGE_SECONDS = 3600
+
 
 def cleanup_temp_folder():
     """Xoa thu muc temp khi app shutdown"""
     if os.path.exists(app.config["TEMP_FOLDER"]):
         shutil.rmtree(app.config["TEMP_FOLDER"], ignore_errors=True)
+
+
+def cleanup_old_files(folder: str, max_age_seconds: int = MAX_FILE_AGE_SECONDS):
+    """Xoa cac file cu hon max_age_seconds trong folder"""
+    if not os.path.exists(folder):
+        return
+    
+    import time
+    current_time = time.time()
+    
+    for filename in os.listdir(folder):
+        filepath = os.path.join(folder, filename)
+        if os.path.isfile(filepath):
+            file_age = current_time - os.path.getmtime(filepath)
+            if file_age > max_age_seconds:
+                try:
+                    os.remove(filepath)
+                except Exception:
+                    pass
+
+
+@app.before_request
+def before_request():
+    """Cleanup old files truoc moi request"""
+    cleanup_old_files(app.config["UPLOAD_FOLDER"])
+    cleanup_old_files(app.config["GRADCAM_FOLDER"])
 
 
 atexit.register(cleanup_temp_folder)
