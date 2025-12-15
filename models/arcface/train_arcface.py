@@ -801,12 +801,26 @@ class ArcFaceTrainer:
         """Luu training history ra file JSON de download va phan tich"""
         import json
         
+        def convert_to_native(obj):
+            """Convert numpy types sang Python native types de JSON serialize"""
+            if isinstance(obj, np.floating):
+                return float(obj)
+            elif isinstance(obj, np.integer):
+                return int(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, dict):
+                return {k: convert_to_native(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_to_native(item) for item in obj]
+            return obj
+        
         history_path = self.checkpoint_dir / 'training_history.json'
         
         history_data = {
-            'history': self.history,
-            'best_val_acc': self.best_val_acc,
-            'best_val_loss': self.best_val_loss,
+            'history': convert_to_native(self.history),
+            'best_val_acc': convert_to_native(self.best_val_acc),
+            'best_val_loss': convert_to_native(self.best_val_loss),
             'total_epochs': self.current_epoch + 1,
             'num_classes': self.num_classes,
             'config': {
