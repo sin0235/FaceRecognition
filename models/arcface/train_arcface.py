@@ -111,6 +111,113 @@ def mixup_criterion(criterion, pred, y_a, y_b, lam):
     return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
 
+def compute_embedding_metrics(embeddings, labels, num_pairs=5000):
+    """
+    Tinh embedding quality metrics cho validation (open-set evaluation)
+    
+    Khi train/val co cac identity khac nhau, classification accuracy khong co y nghia.
+    Thay vao do, danh gia chat luong embedding thong qua:
+    - Intra-class distance: khoang cach giua embeddings cung identity (can nho)
+    - Inter-class distance: khoang cach giua embeddings khac identity (can lon)
+    - Silhouette score: do phan tach clustering (-1 den 1, cang cao cang tot)
+    - Verification accuracy: do chinh xac voi pairs same/different
+    
+    Args:
+        embeddings: numpy array (N, embedding_dim)
+        labels: numpy array (N,)
+        num_pairs: so cap de tinh verification accuracy
+        
+    Returns:
+        dict voi cac metrics
+    """
+    from scipy.spatial.distance import cosine
+    
+    metrics = {}
+    unique_labels = np.unique(labels)
+    
+    # 1. Intra-class distance (cung identity - can nho)
+    intra_dists = []
+    for label in unique_labels:
+        mask = labels == label
+        if mask.sum() > 1:
+            class_embeds = embeddings[mask]
+            n = min(len(class_embeds), 20)
+            for i in range(n):
+                for j in range(i+1, n):
+                    dist = cosine(class_embeds[i], class_embeds[j])
+                    intra_dists.append(dist)
+    metrics['intra_class_dist'] = np.mean(intra_dists) if intra_dists else 0
+    
+    # 2. Inter-class distance (khac identity - can lon)
+    inter_dists = []
+    sample_size = min(num_pairs, len(labels) * 2)
+    for _ in range(sample_size):
+        idx1, idx2 = np.random.choice(len(labels), 2, replace=False)
+        if labels[idx1] != labels[idx2]:
+            dist = cosine(embeddings[idx1], embeddings[idx2])
+            inter_dists.append(dist)
+    metrics['inter_class_dist'] = np.mean(inter_dists) if inter_dists else 0
+    
+    # 3. Silhouette score
+    try:
+        from sklearn.metrics import silhouette_score
+        if len(unique_labels) > 1:
+            if len(labels) > 3000:
+                indices = np.random.choice(len(labels), 3000, replace=False)
+                metrics['silhouette'] = silhouette_score(
+                    embeddings[indices], labels[indices], metric='cosine'
+                )
+            else:
+                metrics['silhouette'] = silhouette_score(
+                    embeddings, labels, metric='cosine'
+                )
+        else:
+            metrics['silhouette'] = 0
+    except Exception:
+        metrics['silhouette'] = 0
+    
+    # 4. Verification accuracy
+    positive_pairs = []
+    negative_pairs = []
+    
+    for _ in range(num_pairs):
+        # Positive pair (cung identity)
+        label = np.random.choice(unique_labels)
+        mask = labels == label
+        if mask.sum() >= 2:
+            indices = np.where(mask)[0]
+            i, j = np.random.choice(indices, 2, replace=False)
+            dist = cosine(embeddings[i], embeddings[j])
+            positive_pairs.append(dist)
+        
+        # Negative pair (khac identity)
+        idx1, idx2 = np.random.choice(len(labels), 2, replace=False)
+        if labels[idx1] != labels[idx2]:
+            dist = cosine(embeddings[idx1], embeddings[idx2])
+            negative_pairs.append(dist)
+    
+    # Tim threshold toi uu
+    if positive_pairs and negative_pairs:
+        all_dists = positive_pairs + negative_pairs
+        all_binary = [1] * len(positive_pairs) + [0] * len(negative_pairs)
+        
+        best_acc = 0
+        best_threshold = 0.5
+        for threshold in np.arange(0.1, 1.0, 0.02):
+            predictions = [1 if d < threshold else 0 for d in all_dists]
+            acc = sum(p == l for p, l in zip(predictions, all_binary)) / len(all_binary)
+            if acc > best_acc:
+                best_acc = acc
+                best_threshold = threshold
+        
+        metrics['verification_acc'] = best_acc * 100
+        metrics['best_threshold'] = best_threshold
+    else:
+        metrics['verification_acc'] = 50.0
+        metrics['best_threshold'] = 0.5
+    
+    return metrics
+
 
 class EarlyStopping:
     """
@@ -233,7 +340,10 @@ class ArcFaceTrainer:
             'train_loss': [],
             'train_acc': [],
             'val_loss': [],
-            'val_acc': [],
+            'verification_acc': [],
+            'silhouette': [],
+            'intra_class_dist': [],
+            'inter_class_dist': [],
             'learning_rate': [],
             'epoch': []
         }
@@ -557,12 +667,19 @@ class ArcFaceTrainer:
         return epoch_loss, epoch_acc
     
     def validate(self):
-        """Validation (ho tro Mixed Precision)"""
+        """
+        Validation su dung embedding-based metrics (open-set evaluation)
+        
+        Khi train/val co cac identity khac nhau, classification accuracy khong co y nghia.
+        Thay vao do, danh gia chat luong embedding thong qua:
+        - Intra-class distance: khoang cach giua embeddings cung identity
+        - Inter-class distance: khoang cach giua embeddings khac identity  
+        - Silhouette score: do phan tach clustering
+        - Verification accuracy: do chinh xac voi pairs same/different
+        """
         self.model.eval()
         
         running_loss = 0.0
-        correct = 0
-        total = 0
         
         all_embeddings = []
         all_labels = []
@@ -581,20 +698,19 @@ class ArcFaceTrainer:
                     loss = self.criterion(outputs, labels)
                 
                 running_loss += loss.item()
-                _, predicted = outputs.max(1)
-                total += labels.size(0)
-                correct += predicted.eq(labels).sum().item()
                 
                 all_embeddings.append(embeddings.float().cpu().numpy())
                 all_labels.append(labels.cpu().numpy())
         
         val_loss = running_loss / len(self.val_loader)
-        val_acc = 100. * correct / total
         
         all_embeddings = np.concatenate(all_embeddings, axis=0)
         all_labels = np.concatenate(all_labels, axis=0)
         
-        return val_loss, val_acc, all_embeddings, all_labels
+        # Tinh embedding-based metrics
+        embedding_metrics = compute_embedding_metrics(all_embeddings, all_labels)
+        
+        return val_loss, embedding_metrics, all_embeddings, all_labels
     
     def visualize_embeddings(self, embeddings, labels, save_path):
         """Visualize embeddings voi t-SNE"""
@@ -744,21 +860,32 @@ class ArcFaceTrainer:
             # Train
             train_loss, train_acc = self.train_epoch()
             
-            # Validate
-            val_loss, val_acc, embeddings, labels = self.validate()
+            # Validate (su dung embedding-based metrics)
+            val_loss, embedding_metrics, embeddings, labels = self.validate()
+            
+            # Lay cac metrics tu embedding_metrics
+            verification_acc = embedding_metrics.get('verification_acc', 0)
+            silhouette = embedding_metrics.get('silhouette', 0)
+            intra_dist = embedding_metrics.get('intra_class_dist', 0)
+            inter_dist = embedding_metrics.get('inter_class_dist', 0)
+            best_threshold = embedding_metrics.get('best_threshold', 0.5)
             
             # Update scheduler (chi khi khong con warmup)
             if self.scheduler and not is_warmup:
                 if self.scheduler_type == 'metric':
-                    # ReduceLROnPlateau - can metric
-                    self.scheduler.step(val_loss)
+                    # ReduceLROnPlateau - can metric (dung verification_acc)
+                    self.scheduler.step(-verification_acc)  # negative vi scheduler mode='min'
                 else:
                     # StepLR, CosineAnnealingLR - theo epoch
                     self.scheduler.step()
             
             # Logging
             print(f"\nTrain Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}%")
-            print(f"Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.2f}%")
+            print(f"Val Loss: {val_loss:.4f}")
+            print(f"Embedding Metrics:")
+            print(f"  Verification Acc: {verification_acc:.2f}% (threshold: {best_threshold:.3f})")
+            print(f"  Silhouette Score: {silhouette:.4f}")
+            print(f"  Intra-class Dist: {intra_dist:.4f} | Inter-class Dist: {inter_dist:.4f}")
             print(f"Learning Rate: {self.get_lr():.2e}")
             
             # Save to history
@@ -766,7 +893,10 @@ class ArcFaceTrainer:
             self.history['train_loss'].append(train_loss)
             self.history['train_acc'].append(train_acc)
             self.history['val_loss'].append(val_loss)
-            self.history['val_acc'].append(val_acc)
+            self.history['verification_acc'].append(verification_acc)
+            self.history['silhouette'].append(silhouette)
+            self.history['intra_class_dist'].append(intra_dist)
+            self.history['inter_class_dist'].append(inter_dist)
             self.history['learning_rate'].append(self.get_lr())
             
             # Save history to JSON file
@@ -776,7 +906,10 @@ class ArcFaceTrainer:
                 self.writer.add_scalar('Train/Loss', train_loss, epoch)
                 self.writer.add_scalar('Train/Accuracy', train_acc, epoch)
                 self.writer.add_scalar('Val/Loss', val_loss, epoch)
-                self.writer.add_scalar('Val/Accuracy', val_acc, epoch)
+                self.writer.add_scalar('Val/Verification_Acc', verification_acc, epoch)
+                self.writer.add_scalar('Val/Silhouette', silhouette, epoch)
+                self.writer.add_scalar('Val/Intra_Dist', intra_dist, epoch)
+                self.writer.add_scalar('Val/Inter_Dist', inter_dist, epoch)
                 self.writer.add_scalar('Learning_Rate', self.get_lr(), epoch)
             
             # Visualize embeddings
@@ -785,23 +918,27 @@ class ArcFaceTrainer:
                     vis_path = self.log_dir / f'embeddings_epoch_{epoch+1}.png'
                     self.visualize_embeddings(embeddings, labels, vis_path)
             
-            # Check best model
-            is_best = val_acc > self.best_val_acc
+            # Check best model (dung verification_acc thay vi classification acc)
+            is_best = verification_acc > self.best_val_acc
             if is_best:
-                self.best_val_acc = val_acc
+                self.best_val_acc = verification_acc
                 self.best_val_loss = val_loss
-                print(f"New best model! Val Acc: {val_acc:.2f}%")
+                print(f"New best model! Verification Acc: {verification_acc:.2f}%")
             
-            self.save_checkpoint(val_acc, val_loss, is_best)
+            self.save_checkpoint(verification_acc, val_loss, is_best)
             
-            # Early Stopping check - dung metric phu hop (loss hoac accuracy)
+            # Early Stopping check - dung verification_acc
             if self.early_stopping:
-                es_metric = val_loss if self.es_mode == 'min' else val_acc
+                # Luon dung verification_acc cho open-set evaluation
+                es_metric = verification_acc
+                # Early stopping theo max vi verification_acc cang cao cang tot
+                if self.es_mode == 'min':
+                    es_metric = -verification_acc  # convert sang min mode
                 if self.early_stopping(es_metric, epoch):
                     print(f"\n{'='*60}")
                     print(f"EARLY STOPPING!")
                     print(f"Best epoch: {self.early_stopping.best_epoch + 1}")
-                    print(f"Best val accuracy: {self.best_val_acc:.2f}%")
+                    print(f"Best verification accuracy: {self.best_val_acc:.2f}%")
                     print(f"Best val loss: {self.best_val_loss:.4f}")
                     print(f"{'='*60}")
                     break
@@ -812,7 +949,7 @@ class ArcFaceTrainer:
         print("TRAINING HOAN TAT")
         print("="*60)
         print(f"Thoi gian training: {total_time/3600:.2f} gio")
-        print(f"Best validation accuracy: {self.best_val_acc:.2f}%")
+        print(f"Best verification accuracy: {self.best_val_acc:.2f}%")
         print(f"Best validation loss: {self.best_val_loss:.4f}")
         print(f"Final learning rate: {self.get_lr():.2e}")
         
