@@ -1,32 +1,51 @@
+# Requirements cho Face Recognition Project
+# Ho tro: Training, Inference, Web App
+
+# ===== CORE =====
 numpy>=1.24.0
 pandas>=2.0.0
-opencv-python>=4.8.0
-pillow>=10.0.0
-torch>=2.1.0
-torchvision>=0.16.0
-insightface==0.7.3
-mxnet>=1.9.0
-onnx>=1.14.0
-onnxruntime-gpu==1.16.0
-tensorflow>=2.13.0
-keras>=2.13.0
 scikit-learn>=1.3.0
+
+# ===== IMAGE PROCESSING =====
+opencv-python>=4.8.0
+opencv-contrib-python>=4.8.0
+pillow>=10.0.0
+scikit-image>=0.20.0
+
+# ===== PYTORCH =====
+torch>=2.0.0
+torchvision>=0.15.0
+
+# ===== FACE RECOGNITION =====
+facenet-pytorch>=2.5.2
+mtcnn>=0.1.1
+# retinaface-pytorch - SKIP, conflict voi torch version
+
+# ===== WEB FRAMEWORK =====
+flask>=2.0.0
+werkzeug>=2.0.0
+
+# ===== VISUALIZATION =====
 matplotlib>=3.7.0
 seaborn>=0.12.0
-albumentations>=1.3.0
+
+# ===== UTILS =====
 pyyaml>=6.0
 tqdm>=4.65.0
-tensorboard>=2.13.0
-streamlit>=1.28.0
-mtcnn>=0.1.1
-facenet-pytorch>=2.5.2
-flask>=2.0.0
-flask-sqlalchemy>=3.0.2
-flask-login>=0.6.2
-flask-wtf>=1.0.1
-flask-migrate>=4.0.4
-flask-restful>=0.3.9
-flask-restx>=0.5.1
-flask-caching>=2.0.0
-werkzeug>=2.0.0
-faiss-gpu==1.7.4
+
+# ===== OPTIONAL: Training dependencies (cho Kaggle/GPU) =====
+# Uncomment neu can training:
+# insightface==0.7.3
+# mxnet>=1.9.0
+# onnx>=1.14.0
+# onnxruntime-gpu==1.16.0
+# tensorflow>=2.13.0
+# keras>=2.13.0
+# albumentations>=1.3.0
+# tensorboard>=2.13.0
+# faiss-gpu==1.7.4
+
+# ===== OPTIONAL: Extended Flask plugins =====
+# flask-sqlalchemy>=3.0.2
+# flask-login>=0.6.2
+# flask-wtf>=1.0.1

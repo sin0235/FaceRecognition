@@ -1,16 +1,23 @@
 """
 Recognition Engine
 Xu ly nhan dang khuon mat su dung embeddings database
-Ho tro: ArcFace model, FAISS index, threshold tuning
+Ho tro: ArcFace model, FAISS index, threshold tuning, Face Detection, Face Alignment
 """
 
 import os
 import sys
 import numpy as np
+import cv2
 from typing import Optional, Tuple, List, Dict, Union
 from PIL import Image
 
 import torch
+
+try:
+    from skimage.transform import SimilarityTransform
+    HAS_SKIMAGE = True
+except ImportError:
+    HAS_SKIMAGE = False
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(ROOT_DIR)
@@ -20,6 +27,15 @@ from inference.extract_embeddings import (
     get_transform,
     extract_embedding_single
 )
+from preprocessing.face_detector import FaceDetector
+
+ARCFACE_TEMPLATE = np.array([
+    [38.2946, 51.6963],
+    [73.5318, 51.5014],
+    [56.0252, 71.7366],
+    [41.5493, 92.3655],
+    [70.7299, 92.2041]
+], dtype=np.float32)
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
@@ -53,7 +69,8 @@ class RecognitionEngine:
         prototypes_path: str = None,
         label_mapping_path: str = None,
         device: str = None,
-        threshold: float = 0.5
+        threshold: float = 0.5,
+        use_face_detection: bool = True
     ):
         """
         Khoi tao Recognition Engine
@@ -66,9 +83,11 @@ class RecognitionEngine:
             label_mapping_path: Duong dan den label mapping (.npy)
             device: 'cuda' hoac 'cpu'
             threshold: Nguong similarity de nhan dang
+            use_face_detection: Bat/tat face detection truoc khi extract embedding
         """
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
         self.threshold = threshold
+        self.use_face_detection = use_face_detection
         
         # Load model
         self.model = None
@@ -77,6 +96,21 @@ class RecognitionEngine:
             self.model, self.model_info = load_arcface_model(model_path, self.device)
         
         self.transform = get_transform()
+        
+        # Khoi tao Face Detector
+        self.face_detector = None
+        if self.use_face_detection:
+            try:
+                self.face_detector = FaceDetector(
+                    backend='mtcnn',
+                    device=self.device,
+                    confidence_threshold=0.9,
+                    select_largest=True
+                )
+                print("Face detector initialized (MTCNN)")
+            except Exception as e:
+                print(f"Khong the khoi tao Face Detector: {e}")
+                self.use_face_detection = False
         
         # Load database
         self.db = None
@@ -121,9 +155,84 @@ class RecognitionEngine:
         """Thay doi threshold"""
         self.threshold = threshold
     
+    def align_face(self, image: np.ndarray, landmarks: Dict) -> Optional[np.ndarray]:
+        """
+        Align face theo ArcFace template (112x112)
+        
+        Args:
+            image: Anh BGR format (tu cv2)
+            landmarks: Dict voi 5 diem (left_eye, right_eye, nose, left_mouth, right_mouth)
+            
+        Returns:
+            Anh da align 112x112 hoac None
+        """
+        if not HAS_SKIMAGE:
+            return None
+            
+        try:
+            src = np.array([
+                landmarks.get('left_eye', [0, 0]),
+                landmarks.get('right_eye', [0, 0]),
+                landmarks.get('nose', [0, 0]),
+                landmarks.get('left_mouth', [0, 0]),
+                landmarks.get('right_mouth', [0, 0])
+            ], dtype=np.float32)
+            
+            if np.all(src == 0):
+                return None
+            
+            tform = SimilarityTransform()
+            tform.estimate(src, ARCFACE_TEMPLATE)
+            M = tform.params[0:2, :]
+            
+            aligned = cv2.warpAffine(image, M, (112, 112), borderValue=0)
+            return aligned
+            
+        except Exception as e:
+            print(f"Loi align face: {e}")
+            return None
+    
+    def detect_and_align(self, img_input: Union[str, np.ndarray]) -> Optional[Image.Image]:
+        """
+        Detect va align face tu anh
+        
+        Args:
+            img_input: Duong dan anh hoac numpy array BGR
+            
+        Returns:
+            PIL Image da align hoac None
+        """
+        if self.face_detector is None:
+            return None
+        
+        if isinstance(img_input, str):
+            image = cv2.imread(img_input)
+            if image is None:
+                return None
+        else:
+            image = img_input
+        
+        detection = self.face_detector.detect(image)
+        if detection is None:
+            return None
+        
+        landmarks = detection.get('landmarks')
+        if landmarks and HAS_SKIMAGE:
+            aligned = self.align_face(image, landmarks)
+            if aligned is not None:
+                aligned_rgb = cv2.cvtColor(aligned, cv2.COLOR_BGR2RGB)
+                return Image.fromarray(aligned_rgb)
+        
+        cropped = self.face_detector.crop_face(image, margin=0.2, target_size=(112, 112))
+        if cropped is not None:
+            cropped_rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
+            return Image.fromarray(cropped_rgb)
+        
+        return None
+    
     def extract_embedding(self, img_input: Union[str, Image.Image]) -> Optional[np.ndarray]:
         """
-        Trich xuat embedding tu anh
+        Trich xuat embedding tu anh (co ho tro face detection + alignment)
         
         Args:
             img_input: Duong dan anh hoac PIL Image
@@ -135,7 +244,14 @@ class RecognitionEngine:
             print("Model chua duoc load")
             return None
         
-        return extract_embedding_single(img_input, self.model, self.transform, self.device)
+        processed_img = img_input
+        
+        if self.use_face_detection and self.face_detector is not None:
+            aligned = self.detect_and_align(img_input)
+            if aligned is not None:
+                processed_img = aligned
+        
+        return extract_embedding_single(processed_img, self.model, self.transform, self.device)
     
     def recognize_with_db(self, embedding: np.ndarray) -> Tuple[str, float, List[Tuple[str, float]]]:
         """

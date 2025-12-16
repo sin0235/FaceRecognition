@@ -1,7 +1,7 @@
 """
 Extract Embeddings Script
 Trich xuat embeddings tu anh su dung trained ArcFace model
-Ho tro: FAISS index, prototype computation, t-SNE visualization
+Ho tro: FAISS index, prototype computation, t-SNE visualization, Face Detection + Alignment
 """
 
 import os
@@ -9,8 +9,9 @@ import sys
 import argparse
 import numpy as np
 import pandas as pd
+import cv2
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 from PIL import Image
 
 import torch
@@ -20,8 +21,24 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from tqdm import tqdm
 
+try:
+    from skimage.transform import SimilarityTransform
+    HAS_SKIMAGE = True
+except ImportError:
+    HAS_SKIMAGE = False
+
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(ROOT_DIR)
+
+from preprocessing.face_detector import FaceDetector
+
+ARCFACE_TEMPLATE = np.array([
+    [38.2946, 51.6963],
+    [73.5318, 51.5014],
+    [56.0252, 71.7366],
+    [41.5493, 92.3655],
+    [70.7299, 92.2041]
+], dtype=np.float32)
 
 
 def load_arcface_model(model_path: str, device: str = 'cpu') -> Tuple[nn.Module, dict]:
@@ -77,6 +94,99 @@ def get_transform(image_size: int = 112):
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
     ])
+
+
+class FacePreprocessor:
+    """
+    Face Preprocessor: Detect + Align face truoc khi extract embedding
+    Dam bao nhat quan voi recognition_engine.py
+    """
+    
+    def __init__(self, device: str = 'cpu'):
+        self.device = device
+        self.detector = None
+        self._init_detector()
+    
+    def _init_detector(self):
+        try:
+            self.detector = FaceDetector(
+                backend='mtcnn',
+                device=self.device,
+                confidence_threshold=0.9,
+                select_largest=True
+            )
+            print("[OK] FacePreprocessor initialized (MTCNN)")
+        except Exception as e:
+            print(f"[WARN] Khong the khoi tao Face Detector: {e}")
+            self.detector = None
+    
+    def align_face(self, image: np.ndarray, landmarks: Dict) -> Optional[np.ndarray]:
+        """
+        Align face theo ArcFace template (112x112)
+        """
+        if not HAS_SKIMAGE:
+            return None
+        
+        try:
+            src = np.array([
+                landmarks.get('left_eye', [0, 0]),
+                landmarks.get('right_eye', [0, 0]),
+                landmarks.get('nose', [0, 0]),
+                landmarks.get('left_mouth', [0, 0]),
+                landmarks.get('right_mouth', [0, 0])
+            ], dtype=np.float32)
+            
+            if np.all(src == 0):
+                return None
+            
+            tform = SimilarityTransform()
+            tform.estimate(src, ARCFACE_TEMPLATE)
+            M = tform.params[0:2, :]
+            
+            aligned = cv2.warpAffine(image, M, (112, 112), borderValue=0)
+            return aligned
+        except Exception:
+            return None
+    
+    def process(self, img_input: Union[str, np.ndarray]) -> Optional[Image.Image]:
+        """
+        Detect va align face tu anh
+        
+        Args:
+            img_input: Duong dan anh hoac numpy array BGR
+            
+        Returns:
+            PIL Image da align (112x112) hoac None
+        """
+        if self.detector is None:
+            if isinstance(img_input, str):
+                return Image.open(img_input).convert('RGB')
+            return Image.fromarray(cv2.cvtColor(img_input, cv2.COLOR_BGR2RGB))
+        
+        if isinstance(img_input, str):
+            image = cv2.imread(img_input)
+            if image is None:
+                return None
+        else:
+            image = img_input
+        
+        detection = self.detector.detect(image)
+        if detection is None:
+            return None
+        
+        landmarks = detection.get('landmarks')
+        if landmarks and HAS_SKIMAGE:
+            aligned = self.align_face(image, landmarks)
+            if aligned is not None:
+                aligned_rgb = cv2.cvtColor(aligned, cv2.COLOR_BGR2RGB)
+                return Image.fromarray(aligned_rgb)
+        
+        cropped = self.detector.crop_face(image, margin=0.2, target_size=(112, 112))
+        if cropped is not None:
+            cropped_rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
+            return Image.fromarray(cropped_rgb)
+        
+        return None
 
 
 def extract_embedding_single(
@@ -440,10 +550,19 @@ def extract_embedding_for_folder(
     folder: str,
     model: nn.Module,
     transform,
-    device: str = 'cpu'
+    device: str = 'cpu',
+    preprocessor: Optional[FacePreprocessor] = None
 ) -> Optional[np.ndarray]:
     """
     Trich xuat va tinh trung binh embeddings cho tat ca anh trong folder
+    Co ho tro face detection + alignment
+    
+    Args:
+        folder: Thu muc chua anh
+        model: ArcFace model
+        transform: Image transform
+        device: Device
+        preprocessor: FacePreprocessor instance (optional)
     """
     if not os.path.exists(folder):
         return None
@@ -451,9 +570,18 @@ def extract_embedding_for_folder(
     embeddings = []
     
     for f in os.listdir(folder):
-        if f.lower().endswith(('.jpg', '.jpeg', '.png')):
+        if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
             img_path = os.path.join(folder, f)
-            emb = extract_embedding_single(img_path, model, transform, device)
+            
+            processed_img = None
+            if preprocessor is not None:
+                processed_img = preprocessor.process(img_path)
+            
+            if processed_img is not None:
+                emb = extract_embedding_single(processed_img, model, transform, device)
+            else:
+                emb = extract_embedding_single(img_path, model, transform, device)
+                
             if emb is not None:
                 embeddings.append(emb)
     
@@ -471,10 +599,18 @@ def build_db(
     model_path: str,
     root_folder: str = "data/celeb",
     save_path: str = "data/embeddings_db.npy",
-    device: str = None
+    device: str = None,
+    use_face_detection: bool = True
 ) -> None:
     """
     Build embedding database tu folder celebrities
+    
+    Args:
+        model_path: Duong dan checkpoint
+        root_folder: Thu muc chua cac folder celebrity
+        save_path: Duong dan luu embeddings_db.npy
+        device: 'cuda' hoac 'cpu'
+        use_face_detection: Su dung face detection + alignment truoc khi extract
     """
     print("="*60)
     print("EXTRACT EMBEDDINGS DATABASE")
@@ -484,6 +620,7 @@ def build_db(
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     print(f"\nDevice: {device}")
+    print(f"Use face detection: {use_face_detection}")
     
     if not os.path.exists(root_folder):
         print(f"Root folder khong ton tai: {root_folder}")
@@ -491,6 +628,10 @@ def build_db(
     
     model, _ = load_arcface_model(model_path, device)
     transform = get_transform()
+    
+    preprocessor = None
+    if use_face_detection:
+        preprocessor = FacePreprocessor(device=device)
     
     db: Dict[str, np.ndarray] = {}
     
@@ -500,11 +641,15 @@ def build_db(
     print(f"\nTim thay {len(persons)} celebrities")
     print("Dang extract embeddings...\n")
     
+    success_count = 0
     for person in tqdm(persons, desc="Processing"):
         person_folder = os.path.join(root_folder, person)
-        emb = extract_embedding_for_folder(person_folder, model, transform, device)
+        emb = extract_embedding_for_folder(
+            person_folder, model, transform, device, preprocessor
+        )
         if emb is not None:
             db[person] = emb
+            success_count += 1
     
     if len(db) == 0:
         print("\nKhong co embeddings nao duoc tao!")
@@ -514,6 +659,7 @@ def build_db(
     np.save(save_path, db)
     
     print(f"\nDa luu {len(db)} embeddings vao {save_path}")
+    print(f"Success rate: {success_count}/{len(persons)} ({100*success_count/len(persons):.1f}%)")
     print("\nDatabase ready!")
 
 
@@ -586,15 +732,22 @@ if __name__ == "__main__":
                        help='Output path for db mode')
     parser.add_argument('--device', type=str, default=None)
     parser.add_argument('--batch-size', type=int, default=64)
+    parser.add_argument('--use-face-detection', action='store_true', default=True,
+                       help='Use face detection + alignment before extracting embeddings (default: True)')
+    parser.add_argument('--no-face-detection', action='store_true',
+                       help='Disable face detection (use raw images)')
     
     args = parser.parse_args()
+    
+    use_fd = args.use_face_detection and not args.no_face_detection
     
     if args.mode == 'db':
         build_db(
             model_path=args.model_path,
             root_folder=args.data_dir,
             save_path=args.output_path,
-            device=args.device
+            device=args.device,
+            use_face_detection=use_fd
         )
     elif args.mode == 'csv':
         if args.csv_path is None:
