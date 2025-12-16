@@ -22,19 +22,48 @@
     </div>
 
     <div class="upload-row">
-      <div class="preview-box">
+      <div class="preview-box" id="previewBox">
         {% if image_name %}
-        <img src="{{ url_for('static', filename='uploads/' + image_name) }}" />
-        {% else %}Preview{% endif %}
+        <img
+          id="previewImg"
+          src="{{ url_for('static', filename='uploads/' + image_name) }}"
+        />
+        {% else %}<span id="previewText">Preview</span
+        ><img id="previewImg" style="display: none" />{% endif %}
       </div>
 
       <div>
-        <input type="file" name="image" accept="image/*" />
+        <input
+          type="file"
+          name="image"
+          accept="image/*"
+          id="imageInput"
+          onchange="previewImage(this)"
+        />
         <br /><br />
         <button class="btn">Nhan dang</button>
       </div>
     </div>
   </form>
+
+  <script>
+    function previewImage(input) {
+      const previewImg = document.getElementById("previewImg");
+      const previewText = document.getElementById("previewText");
+
+      if (input.files && input.files[0]) {
+        const reader = new FileReader();
+
+        reader.onload = function (e) {
+          previewImg.src = e.target.result;
+          previewImg.style.display = "block";
+          if (previewText) previewText.style.display = "none";
+        };
+
+        reader.readAsDataURL(input.files[0]);
+      }
+    }
+  </script>
 
   {% if result %}
   <!-- 3 Model Cards -->
