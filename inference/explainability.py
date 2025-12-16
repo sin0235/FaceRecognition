@@ -259,12 +259,12 @@ class ExplainabilityEngine:
     
     def _align_face(self, image: np.ndarray, landmarks: dict) -> Optional[np.ndarray]:
         """Align face theo ArcFace template"""
-        if not HAS_SKIMAGE:
+        try:
+            from skimage.transform import SimilarityTransform
+        except ImportError:
             return None
         
         try:
-            from skimage.transform import SimilarityTransform
-            
             # ArcFace template (112x112)
             template = np.array([
                 [38.2946, 51.6963],   # left eye

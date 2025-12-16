@@ -211,6 +211,108 @@ def extract_face_detection_info(image_path):
         return None
 
 
+def preprocess_face_for_model(image_path, target_size=(160, 160)):
+    """
+    Detect, align va resize face cho model (FaceNet)
+    
+    Args:
+        image_path: Duong dan anh
+        target_size: Kich thuoc output (W, H)
+        
+    Returns:
+        PIL Image da preprocessed hoac None
+    """
+    try:
+        from preprocessing.face_detector import FaceDetector
+        
+        image = cv2.imread(image_path)
+        if image is None:
+            return None
+        
+        detector = FaceDetector(
+            backend='mtcnn',
+            device='cpu',
+            confidence_threshold=0.9,
+            select_largest=True
+        )
+        
+        detection = detector.detect(image)
+        
+        if detection is None:
+            # Fallback: resize anh goc
+            pil_img = Image.open(image_path).convert('RGB')
+            return pil_img.resize(target_size)
+        
+        # Crop face voi margin
+        cropped = detector.crop_face(image, margin=0.2, target_size=target_size)
+        if cropped is not None:
+            cropped_rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
+            return Image.fromarray(cropped_rgb)
+        
+        # Fallback
+        pil_img = Image.open(image_path).convert('RGB')
+        return pil_img.resize(target_size)
+        
+    except Exception as e:
+        print(f"Preprocessing error: {e}")
+        # Fallback: return resized original
+        try:
+            pil_img = Image.open(image_path).convert('RGB')
+            return pil_img.resize(target_size)
+        except:
+            return None
+
+
+def detect_and_crop_face(image_path, target_size=(100, 100), grayscale=False):
+    """
+    Detect va crop face cho LBPH
+    
+    Args:
+        image_path: Duong dan anh
+        target_size: Kich thuoc output (W, H)
+        grayscale: Convert to grayscale
+        
+    Returns:
+        numpy array (grayscale neu specified)
+    """
+    try:
+        from preprocessing.face_detector import FaceDetector
+        
+        image = cv2.imread(image_path)
+        if image is None:
+            return None
+        
+        detector = FaceDetector(
+            backend='mtcnn',
+            device='cpu',
+            confidence_threshold=0.9,
+            select_largest=True
+        )
+        
+        cropped = detector.crop_face(image, margin=0.2, target_size=target_size)
+        
+        if cropped is None:
+            # Fallback: resize anh goc
+            cropped = cv2.resize(image, target_size)
+        
+        if grayscale:
+            cropped = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
+        
+        return cropped
+        
+    except Exception as e:
+        print(f"Crop face error: {e}")
+        # Fallback
+        try:
+            image = cv2.imread(image_path)
+            cropped = cv2.resize(image, target_size)
+            if grayscale:
+                cropped = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
+            return cropped
+        except:
+            return None
+
+
 def recognize_with_arcface(image_path, threshold=0.5):
     start_time = time.time()
     engine = get_arcface_engine()
@@ -235,8 +337,13 @@ def recognize_with_facenet(image_path, threshold=0.5):
     face_detection = extract_face_detection_info(image_path)
     
     try:
-        img = Image.open(image_path).convert('RGB')
-        input_tensor = engine['transform'](img).unsqueeze(0).to(engine['device'])
+        # Preprocess face: detect + align + resize to 160x160
+        preprocessed_img = preprocess_face_for_model(image_path, target_size=(160, 160))
+        
+        if preprocessed_img is None:
+            return {"identity": "Cannot preprocess image", "confidence": 0.0, "status": "error", "time_ms": round((time.time() - start_time) * 1000, 2), "face_detection": face_detection}
+        
+        input_tensor = engine['transform'](preprocessed_img).unsqueeze(0).to(engine['device'])
         
         with torch.no_grad():
             embedding = engine['model'](input_tensor).cpu().numpy().flatten()
@@ -271,11 +378,13 @@ def recognize_with_lbph(image_path, threshold=80):
     face_detection = extract_face_detection_info(image_path)
     
     try:
-        img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-        if img is None:
-            return {"identity": "Cannot read image", "confidence": 0.0, "status": "error", "time_ms": 0, "face_detection": face_detection}
+        # Detect va crop face (100x100 grayscale)
+        cropped_face = detect_and_crop_face(image_path, target_size=(100, 100), grayscale=True)
         
-        img = cv2.resize(img, (100, 100))
+        if cropped_face is None:
+            return {"identity": "Cannot detect face", "confidence": 0.0, "status": "error", "time_ms": 0, "face_detection": face_detection}
+        
+        img = cropped_face  # Already resized to 100x100 grayscale
         label, distance = model.predict(img)
         
         identity = lbph_label_map.get(label, f"Person_{label}") if lbph_label_map else f"Person_{label}"
