@@ -17,7 +17,7 @@ arcface:
 
 # Training Configuration
 training:
-  num_epochs: 150
+  num_epochs: 50
   batch_size: 128
   num_workers: 4
 
@@ -30,7 +30,7 @@ training:
   # Optimizer: sgd, adam, adamw
   optimizer:
     type: sgd
-    lr: 0.01 # LR cao theo paper ArcFace
+    lr: 0.001 # LR cao theo paper ArcFace
     momentum: 0.9
     weight_decay: 0.0005
 
