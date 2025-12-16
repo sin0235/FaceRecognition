@@ -242,6 +242,58 @@ class ExplainabilityEngine:
         self.transform = transform
         self.device = device
         self.gradcam = GradCAM(model)
+        
+        # Khoi tao face detector cho alignment
+        self.face_detector = None
+        try:
+            from preprocessing.face_detector import FaceDetector
+            self.face_detector = FaceDetector(
+                backend='mtcnn',
+                device=device,
+                confidence_threshold=0.9,
+                select_largest=True
+            )
+            print("[Explainability] Face detector initialized")
+        except Exception as e:
+            print(f"[Explainability] Cannot init face detector: {e}")
+    
+    def _align_face(self, image: np.ndarray, landmarks: dict) -> Optional[np.ndarray]:
+        """Align face theo ArcFace template"""
+        if not HAS_SKIMAGE:
+            return None
+        
+        try:
+            from skimage.transform import SimilarityTransform
+            
+            # ArcFace template (112x112)
+            template = np.array([
+                [38.2946, 51.6963],   # left eye
+                [73.5318, 51.5014],   # right eye
+                [56.0252, 71.7366],   # nose
+                [41.5493, 92.3655],   # left mouth
+                [70.7299, 92.2041]    # right mouth
+            ], dtype=np.float32)
+            
+            src = np.array([
+                landmarks.get('left_eye', [0, 0]),
+                landmarks.get('right_eye', [0, 0]),
+                landmarks.get('nose', [0, 0]),
+                landmarks.get('left_mouth', [0, 0]),
+                landmarks.get('right_mouth', [0, 0])
+            ], dtype=np.float32)
+            
+            if np.all(src == 0):
+                return None
+            
+            tform = SimilarityTransform()
+            tform.estimate(src, template)
+            M = tform.params[0:2, :]
+            
+            aligned = cv2.warpAffine(image, M, (112, 112), borderValue=0)
+            return aligned
+        except Exception as e:
+            print(f"[Explainability] Alignment error: {e}")
+            return None
     
     def explain(
         self,
@@ -254,33 +306,56 @@ class ExplainabilityEngine:
         Returns:
             Dict chua cam, heatmap, overlay
         """
+        # Đọc ảnh gốc
         if isinstance(image_input, str):
             original = cv2.imread(image_input)
-            pil_image = Image.open(image_input).convert('RGB')
+            if original is None:
+                return {'error': 'Cannot read image'}
         else:
-            pil_image = image_input.convert('RGB')
-            original = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+            original = cv2.cvtColor(np.array(image_input), cv2.COLOR_RGB2BGR)
         
-        if original is None:
-            return {'error': 'Cannot read image'}
+        # Detect và align face
+        aligned_face = None
+        if self.face_detector is not None:
+            detection = self.face_detector.detect(original)
+            if detection and detection.get('landmarks'):
+                aligned_face = self._align_face(original, detection['landmarks'])
         
+        # Nếu không align được, dùng crop face hoặc resize
+        if aligned_face is None:
+            if self.face_detector is not None:
+                cropped = self.face_detector.crop_face(original, margin=0.2, target_size=(112, 112))
+                if cropped is not None:
+                    aligned_face = cropped
+        
+        # Fallback: resize ảnh gốc
+        if aligned_face is None:
+            aligned_face = cv2.resize(original, (112, 112))
+        
+        # Convert sang PIL Image
+        aligned_rgb = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
+        pil_image = Image.fromarray(aligned_rgb)
+        
+        # Transform và tạo tensor
         input_tensor = self.transform(pil_image).unsqueeze(0).to(self.device)
         
         if target_embedding is not None:
             target_embedding = target_embedding.to(self.device)
         
+        # Generate Grad-CAM
         cam = self.gradcam.generate(input_tensor, target_embedding)
         
+        # Tạo heatmap và overlay trên ảnh aligned (112x112)
         heatmap = generate_heatmap(cam)
-        heatmap_resized = cv2.resize(heatmap, (original.shape[1], original.shape[0]))
+        heatmap_resized = cv2.resize(heatmap, (112, 112))
         
-        overlay = overlay_heatmap(original, heatmap_resized, alpha=0.5)
+        overlay = overlay_heatmap(aligned_face, heatmap_resized, alpha=0.5)
         
         return {
             'cam': cam,
             'heatmap': cv2.cvtColor(heatmap_resized, cv2.COLOR_BGR2RGB),
             'overlay': cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB),
-            'original': cv2.cvtColor(original, cv2.COLOR_BGR2RGB)
+            'original': cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
         }
     
     def save_explanation(

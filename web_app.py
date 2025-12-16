@@ -4,7 +4,7 @@ Tich hop ArcFace, FaceNet va LBPH models
 Demo cho mon Xu ly anh so
 """
 
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, session
 import os
 import sys
 import cv2
@@ -21,6 +21,7 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT_DIR)
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24)
 app.config["TEMP_FOLDER"] = os.path.join(tempfile.gettempdir(), "face_recognition_temp")
 app.config["UPLOAD_FOLDER"] = "static/uploads"
 app.config["GRADCAM_FOLDER"] = "static/gradcam"
@@ -86,7 +87,7 @@ def get_arcface_engine():
                 arcface_engine = RecognitionEngine(
                     model_path=model_path,
                     db_path=db_path if os.path.exists(db_path) else None,
-                    threshold=0.5
+                    threshold=0.65
                 )
                 print("ArcFace engine loaded")
         except Exception as e:
@@ -162,14 +163,66 @@ def get_explainability_engine():
     return explainability_engine
 
 
+def extract_face_detection_info(image_path):
+    """
+    Extract face detection info từ ảnh
+    
+    Returns:
+        Dict chứa bbox, confidence, landmarks, num_faces, face_size
+    """
+    try:
+        from preprocessing.face_detector import FaceDetector
+        
+        image = cv2.imread(image_path)
+        if image is None:
+            return None
+        
+        detector = FaceDetector(
+            backend='mtcnn',
+            device='cpu',
+            confidence_threshold=0.9,
+            select_largest=True
+        )
+        
+        detection = detector.detect(image)
+        
+        if detection is None:
+            return {
+                "num_faces": 0,
+                "bbox": None,
+                "confidence": 0.0,
+                "landmarks": None,
+                "face_size": None
+            }
+        
+        bbox = detection['bbox']
+        face_width = bbox[2] - bbox[0]
+        face_height = bbox[3] - bbox[1]
+        
+        return {
+            "num_faces": 1,
+            "bbox": bbox,
+            "confidence": detection['confidence'],
+            "landmarks": detection['landmarks'],
+            "face_size": [face_width, face_height]
+        }
+    except Exception as e:
+        print(f"Face detection error: {e}")
+        return None
+
+
 def recognize_with_arcface(image_path, threshold=0.5):
     start_time = time.time()
     engine = get_arcface_engine()
     if engine is None:
-        return {"identity": "Model not loaded", "confidence": 0.0, "status": "error", "time_ms": 0}
+        return {"identity": "Model not loaded", "confidence": 0.0, "status": "error", "time_ms": 0, "face_detection": None}
+    
+    face_detection = extract_face_detection_info(image_path)
+    
     engine.set_threshold(threshold)
     result = engine.recognize(image_path)
     result["time_ms"] = round((time.time() - start_time) * 1000, 2)
+    result["face_detection"] = face_detection
     return result
 
 
@@ -177,7 +230,9 @@ def recognize_with_facenet(image_path, threshold=0.5):
     start_time = time.time()
     engine = get_facenet_engine()
     if engine is None:
-        return {"identity": "Model not loaded", "confidence": 0.0, "status": "error", "time_ms": 0}
+        return {"identity": "Model not loaded", "confidence": 0.0, "status": "error", "time_ms": 0, "face_detection": None}
+    
+    face_detection = extract_face_detection_info(image_path)
     
     try:
         img = Image.open(image_path).convert('RGB')
@@ -187,7 +242,7 @@ def recognize_with_facenet(image_path, threshold=0.5):
             embedding = engine['model'](input_tensor).cpu().numpy().flatten()
         
         if engine['db'] is None:
-            return {"identity": "No database", "confidence": 0.0, "status": "error", "time_ms": round((time.time() - start_time) * 1000, 2)}
+            return {"identity": "No database", "confidence": 0.0, "status": "error", "time_ms": round((time.time() - start_time) * 1000, 2), "face_detection": face_detection}
         
         top_k = []
         for name, db_emb in engine['db'].items():
@@ -202,21 +257,23 @@ def recognize_with_facenet(image_path, threshold=0.5):
             best_name = "Unknown"
         
         elapsed = round((time.time() - start_time) * 1000, 2)
-        return {"identity": best_name, "confidence": best_score, "distance": best_distance, "top_k": top_k[:5], "status": "success", "time_ms": elapsed}
+        return {"identity": best_name, "confidence": best_score, "distance": best_distance, "top_k": top_k[:5], "status": "success", "time_ms": elapsed, "face_detection": face_detection}
     except Exception as e:
-        return {"identity": str(e), "confidence": 0.0, "status": "error", "time_ms": round((time.time() - start_time) * 1000, 2)}
+        return {"identity": str(e), "confidence": 0.0, "status": "error", "time_ms": round((time.time() - start_time) * 1000, 2), "face_detection": face_detection}
 
 
 def recognize_with_lbph(image_path, threshold=80):
     start_time = time.time()
     model = get_lbph_model()
     if model is None:
-        return {"identity": "Model not loaded", "confidence": 0.0, "status": "error", "time_ms": 0}
+        return {"identity": "Model not loaded", "confidence": 0.0, "status": "error", "time_ms": 0, "face_detection": None}
+    
+    face_detection = extract_face_detection_info(image_path)
     
     try:
         img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
         if img is None:
-            return {"identity": "Cannot read image", "confidence": 0.0, "status": "error", "time_ms": 0}
+            return {"identity": "Cannot read image", "confidence": 0.0, "status": "error", "time_ms": 0, "face_detection": face_detection}
         
         img = cv2.resize(img, (100, 100))
         label, distance = model.predict(img)
@@ -227,9 +284,9 @@ def recognize_with_lbph(image_path, threshold=80):
             identity = "Unknown"
         
         elapsed = round((time.time() - start_time) * 1000, 2)
-        return {"identity": identity, "confidence": float(confidence), "distance": float(distance), "status": "success", "time_ms": elapsed}
+        return {"identity": identity, "confidence": float(confidence), "distance": float(distance), "status": "success", "time_ms": elapsed, "face_detection": face_detection}
     except Exception as e:
-        return {"identity": str(e), "confidence": 0.0, "status": "error", "time_ms": round((time.time() - start_time) * 1000, 2)}
+        return {"identity": str(e), "confidence": 0.0, "status": "error", "time_ms": round((time.time() - start_time) * 1000, 2), "face_detection": face_detection}
 
 
 def get_test_data_info():
@@ -252,24 +309,48 @@ def home():
     """Trang chính: Nhận dạng với 3 models + threshold + Grad-CAM"""
     result = None
     image_name = None
-    threshold_val = 0.5
+    threshold_val = 0.65
     gradcam_image = None
     display_image = None
 
+    if request.args.get("action") == "clear":
+        session.pop('last_image_path', None)
+        session.pop('last_image_name', None)
+        return render_template("home.html", active="home", result=None, 
+                              image_name=None, threshold=threshold_val, gradcam_image=None)
+
     if request.method == "POST":
-        threshold_val = float(request.form.get("threshold", 0.5))
+        threshold_val = float(request.form.get("threshold", 0.65))
         file = request.files.get("image")
+        
+        image_to_process = None
+        is_new_upload = False
+        
         if file and file.filename:
+            is_new_upload = True
             unique_id = str(uuid.uuid4())[:8]
             ext = os.path.splitext(file.filename)[1]
             temp_filename = f"{unique_id}{ext}"
             temp_path = os.path.join(app.config["TEMP_FOLDER"], temp_filename)
             file.save(temp_path)
+            image_to_process = temp_path
             
+            display_filename = f"display_{unique_id}{ext}"
+            display_path = os.path.join(app.config["UPLOAD_FOLDER"], display_filename)
+            shutil.copy2(temp_path, display_path)
+            
+            session['last_image_path'] = display_path
+            session['last_image_name'] = display_filename
+            image_name = display_filename
+        elif session.get('last_image_path'):
+            image_to_process = session['last_image_path']
+            image_name = session.get('last_image_name')
+        
+        if image_to_process and os.path.exists(image_to_process):
             try:
-                arcface_result = recognize_with_arcface(temp_path, threshold_val)
-                facenet_result = recognize_with_facenet(temp_path, threshold_val)
-                lbph_result = recognize_with_lbph(temp_path)
+                arcface_result = recognize_with_arcface(image_to_process, threshold_val)
+                facenet_result = recognize_with_facenet(image_to_process, threshold_val)
+                lbph_result = recognize_with_lbph(image_to_process)
                 
                 def fmt(res):
                     if res.get("status") == "success":
@@ -282,24 +363,28 @@ def home():
                     "lbph": fmt(lbph_result)
                 }
                 
-                display_filename = f"display_{unique_id}{ext}"
-                display_path = os.path.join(app.config["UPLOAD_FOLDER"], display_filename)
-                shutil.copy2(temp_path, display_path)
-                image_name = display_filename
+                if is_new_upload:
+                    exp_engine = get_explainability_engine()
+                    if exp_engine:
+                        try:
+                            exp_result = exp_engine.explain(image_to_process)
+                            unique_id = session['last_image_name'].split('_')[1].split('.')[0]
+                            ext = os.path.splitext(session['last_image_name'])[1]
+                            gradcam_filename = f"gradcam_{unique_id}{ext}"
+                            gradcam_path = os.path.join(app.config["GRADCAM_FOLDER"], gradcam_filename)
+                            cv2.imwrite(gradcam_path, cv2.cvtColor(exp_result['overlay'], cv2.COLOR_RGB2BGR))
+                            gradcam_image = f"gradcam/{gradcam_filename}"
+                            session['gradcam_image'] = gradcam_image
+                        except Exception as e:
+                            print(f"Grad-CAM error: {e}")
+                else:
+                    gradcam_image = session.get('gradcam_image')
                 
-                exp_engine = get_explainability_engine()
-                if exp_engine:
-                    try:
-                        exp_result = exp_engine.explain(temp_path)
-                        gradcam_filename = f"gradcam_{unique_id}{ext}"
-                        gradcam_path = os.path.join(app.config["GRADCAM_FOLDER"], gradcam_filename)
-                        cv2.imwrite(gradcam_path, cv2.cvtColor(exp_result['overlay'], cv2.COLOR_RGB2BGR))
-                        gradcam_image = f"gradcam/{gradcam_filename}"
-                    except Exception as e:
-                        print(f"Grad-CAM error: {e}")
-            finally:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
+                if is_new_upload and image_to_process.startswith(app.config["TEMP_FOLDER"]):
+                    if os.path.exists(image_to_process):
+                        os.remove(image_to_process)
+            except Exception as e:
+                print(f"Recognition error: {e}")
 
     return render_template("home.html", active="home", result=result, 
                           image_name=image_name, threshold=threshold_val, gradcam_image=gradcam_image)
