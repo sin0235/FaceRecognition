@@ -135,13 +135,49 @@ main {
   font-weight: 500;
 }
 
-/* ===== UPLOAD ===== */
-.upload-row {
+/* ===== UPLOAD ZONE ===== */
+.upload-zone {
+  border: 3px dashed var(--border);
+  border-radius: 16px;
+  padding: 60px 40px;
+  text-align: center;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.02) 0%, rgba(37, 99, 235, 0.05) 100%);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.upload-zone:hover,
+.upload-zone.drag-over {
+  border-color: var(--primary);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.05) 0%, rgba(37, 99, 235, 0.1) 100%);
+  transform: translateY(-2px);
+}
+
+.upload-zone-content {
   display: flex;
-  gap: 32px;
+  flex-direction: column;
   align-items: center;
 }
 
+.upload-label {
+  display: inline-block;
+  padding: 10px 24px;
+  background: var(--primary);
+  color: white;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.upload-label:hover {
+  background: var(--primary-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+/* ===== PREVIEW BOX ===== */
 .preview-box {
   width: 200px;
   height: 200px;
@@ -171,6 +207,29 @@ main {
   height: 100%;
   object-fit: cover;
   border-radius: 13px;
+}
+
+.preview-box-large {
+  width: 280px;
+  height: 280px;
+  border-radius: 16px;
+  border: 3px solid var(--primary);
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.15);
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.preview-box-large:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(37, 99, 235, 0.2);
+}
+
+/* ===== UPLOAD (legacy) ===== */
+.upload-row {
+  display: flex;
+  gap: 32px;
+  align-items: center;
 }
 
 input[type="file"] {
@@ -252,6 +311,44 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 .btn:active {
   transform: scale(0.98);
+}
+
+.btn-secondary {
+  background: white;
+  color: var(--primary);
+  border: 2px solid var(--primary);
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-secondary:hover {
+  background: var(--primary);
+  color: white;
+}
+
+.btn-outline {
+  background: white;
+  color: var(--error);
+  border: 2px solid var(--error);
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-outline:hover {
+  background: var(--error);
+  color: white;
 }
 
 /* ===== RESULT ===== */

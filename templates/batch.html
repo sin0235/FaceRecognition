@@ -1,60 +1,1264 @@
-{% extends "base.html" %}
-{% block content %}
+{% extends "base.html" %} {% block content %}
 
-<div class="card animate">
+<div class="card">
   <h2>Batch Processing</h2>
-  <p class="subtitle">Upload nhiều ảnh để chạy nhận diện hàng loạt.</p>
+  <p class="subtitle">
+    Upload nhiều ảnh để so sánh kết quả từ cả 3 models đồng thời
+  </p>
 
-  <form method="POST" enctype="multipart/form-data">
-    <div style="margin-bottom:20px">
-      <label style="font-weight:500">Chọn Model:</label>
-      <select name="model" style="padding:8px 16px; border-radius:8px; border:1px solid #ddd; margin-left:10px">
-        <option value="arcface" {% if model_type == 'arcface' %}selected{% endif %}>ArcFace</option>
-        <option value="facenet" {% if model_type == 'facenet' %}selected{% endif %}>FaceNet</option>
-        <option value="lbph" {% if model_type == 'lbph' %}selected{% endif %}>LBPH</option>
-      </select>
+  <form method="POST" enctype="multipart/form-data" id="batchForm">
+    <div class="upload-zone" id="uploadZone">
+      <div class="upload-zone-content">
+        <svg
+          style="
+            width: 48px;
+            height: 48px;
+            color: var(--primary);
+            margin-bottom: 12px;
+          "
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+          ></path>
+        </svg>
+        <div style="font-weight: 600; font-size: 16px; margin-bottom: 6px">
+          Kéo thả ảnh vào đây hoặc
+        </div>
+        <label for="imageInput" class="upload-label" id="uploadLabel"
+          >Chọn ảnh từ máy</label
+        >
+        <input
+          type="file"
+          name="images"
+          id="imageInput"
+          multiple
+          accept="image/*"
+          style="display: none"
+        />
+        <p style="font-size: 12px; color: var(--muted); margin-top: 8px">
+          Hỗ trợ: JPG, PNG, JPEG
+        </p>
+      </div>
     </div>
 
-    <input type="file" name="images" multiple accept="image/*">
-    <br><br>
-    <button class="btn">Run Batch</button>
+    <div id="previewContainer" style="display: none; margin-top: 24px">
+      <div
+        style="
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 16px;
+        "
+      >
+        <h3 style="font-size: 16px; font-weight: 600; color: var(--text)">
+          Ảnh đã chọn (<span id="imageCount">0</span>)
+        </h3>
+        <button type="button" class="btn-secondary" onclick="clearImages()">
+          Xóa tất cả
+        </button>
+      </div>
+      <div id="thumbnailGrid" class="thumbnail-grid"></div>
+      <button
+        type="submit"
+        class="btn"
+        style="width: 100%; margin-top: 20px"
+        id="submitBtn"
+      >
+        Xử lý Batch
+      </button>
+      <div
+        id="loadingIndicator"
+        style="display: none; margin-top: 20px; text-align: center"
+      >
+        <div class="loading-spinner" style="margin: 0 auto"></div>
+        <p style="font-size: 13px; color: var(--muted); margin-top: 12px">
+          Đang xử lý <span id="processingCount">0</span> ảnh với 3 models...
+        </p>
+      </div>
+    </div>
   </form>
 
   {% if results %}
-  <div style="margin-top:30px">
-    <h3 style="margin-bottom:15px">Kết quả ({{ results|length }} ảnh)</h3>
-    <table style="width:100%; border-collapse:collapse">
-      <thead>
-        <tr style="background:#eef2ff">
-          <th style="padding:12px; text-align:left">STT</th>
-          <th style="padding:12px; text-align:left">Image</th>
-          <th style="padding:12px; text-align:left">Prediction</th>
-          <th style="padding:12px; text-align:center">Score</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in results %}
-        <tr style="border-bottom:1px solid #e5e7eb">
-          <td style="padding:10px">{{ loop.index }}</td>
-          <td style="padding:10px">{{ r.image }}</td>
-          <td style="padding:10px">
-            {% if r.name == 'Unknown' or r.name == 'Error' %}
-            <span style="color:#ef4444">{{ r.name }}</span>
-            {% else %}
-            <span style="color:#22c55e">{{ r.name }}</span>
-            {% endif %}
-          </td>
-          <td style="padding:10px; text-align:center">
-            <span style="background:{% if r.score >= 0.7 %}#dcfce7{% elif r.score >= 0.5 %}#fef3c7{% else %}#fee2e2{% endif %}; padding:4px 12px; border-radius:20px">
-              {{ "%.2f"|format(r.score) }}
-            </span>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div style="margin-top: 40px">
+    <div
+      style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+      "
+    >
+      <h3 style="font-size: 20px; font-weight: 700; color: var(--text)">
+        Kết quả so sánh ({{ results|length }} ảnh)
+      </h3>
+      <div style="display: flex; gap: 12px; align-items: center">
+        <span style="font-size: 13px; color: var(--muted)">Sắp xếp:</span>
+        <select id="sortSelect" class="sort-select" onchange="sortResults()">
+          <option value="original">Thứ tự gốc</option>
+          <option value="confidence">Độ tin cậy</option>
+          <option value="time">Thời gian xử lý</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon" style="background: #dbeafe">
+          <svg
+            style="width: 24px; height: 24px; color: var(--primary)"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+            ></path>
+          </svg>
+        </div>
+        <div>
+          <div class="stat-label">Tổng số ảnh</div>
+          <div class="stat-value">{{ results|length }}</div>
+        </div>
+      </div>
+
+      {% set arcface_avg = (results | map(attribute='arcface.confidence') | sum
+      / results|length) if results else 0 %} {% set facenet_avg = (results |
+      map(attribute='facenet.confidence') | sum / results|length) if results
+      else 0 %} {% set lbph_avg = (results | map(attribute='lbph.confidence') |
+      sum / results|length) if results else 0 %}
+
+      <div class="stat-card">
+        <div class="stat-icon" style="background: #dbeafe">
+          <span style="color: #2563eb; font-weight: 700; font-size: 14px"
+            >AF</span
+          >
+        </div>
+        <div>
+          <div class="stat-label">ArcFace TB</div>
+          <div class="stat-value">{{ "%.1f"|format(arcface_avg * 100) }}%</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon" style="background: #ede9fe">
+          <span style="color: #7c3aed; font-weight: 700; font-size: 14px"
+            >FN</span
+          >
+        </div>
+        <div>
+          <div class="stat-label">FaceNet TB</div>
+          <div class="stat-value">{{ "%.1f"|format(facenet_avg * 100) }}%</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon" style="background: #d1fae5">
+          <span style="color: #059669; font-weight: 700; font-size: 14px"
+            >LB</span
+          >
+        </div>
+        <div>
+          <div class="stat-label">LBPH TB</div>
+          <div class="stat-value">{{ "%.1f"|format(lbph_avg * 100) }}%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div style="margin-top: 32px">
+      <h3
+        style="
+          font-size: 18px;
+          font-weight: 700;
+          color: var(--text);
+          margin-bottom: 20px;
+        "
+      >
+        Phân tích hiệu suất Models
+      </h3>
+
+      <div
+        style="
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 20px;
+          margin-bottom: 20px;
+        "
+      >
+        <!-- Confidence Comparison Chart -->
+        <div
+          class="chart-container"
+          style="min-height: 250px; max-height: 300px"
+        >
+          <div
+            style="
+              font-weight: 600;
+              font-size: 14px;
+              color: var(--text);
+              margin-bottom: 12px;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+            "
+          >
+            <svg
+              style="width: 18px; height: 18px; color: var(--primary)"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+              ></path>
+            </svg>
+            So sánh độ tin cậy
+          </div>
+          <canvas id="confidenceChart"></canvas>
+        </div>
+
+        <!-- Processing Time Chart -->
+        <div
+          class="chart-container"
+          style="min-height: 250px; max-height: 300px"
+        >
+          <div
+            style="
+              font-weight: 600;
+              font-size: 14px;
+              color: var(--text);
+              margin-bottom: 12px;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+            "
+          >
+            <svg
+              style="width: 18px; height: 18px; color: var(--warning)"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+              ></path>
+            </svg>
+            Thời gian xử lý trung bình
+          </div>
+          <canvas id="timeChart"></canvas>
+        </div>
+      </div>
+
+      <div
+        style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px"
+      >
+        <!-- Success Rate Chart -->
+        <div
+          class="chart-container"
+          style="min-height: 250px; max-height: 300px"
+        >
+          <div
+            style="
+              font-weight: 600;
+              font-size: 14px;
+              color: var(--text);
+              margin-bottom: 12px;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+            "
+          >
+            <svg
+              style="width: 18px; height: 18px; color: var(--success)"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              ></path>
+            </svg>
+            Tỷ lệ nhận dạng thành công
+          </div>
+          <canvas id="successRateChart"></canvas>
+        </div>
+
+        <!-- Confidence Distribution Chart -->
+        <div
+          class="chart-container"
+          style="min-height: 250px; max-height: 300px"
+        >
+          <div
+            style="
+              font-weight: 600;
+              font-size: 14px;
+              color: var(--text);
+              margin-bottom: 12px;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+            "
+          >
+            <svg
+              style="width: 18px; height: 18px; color: var(--primary)"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
+              ></path>
+            </svg>
+            Phân bố độ tin cậy
+          </div>
+          <canvas id="distributionChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results Table -->
+    <div id="resultsContainer" style="margin-top: 28px">
+      {% for r in results %}
+      <div
+        class="result-card"
+        data-confidence="{{ r[r.best_model].confidence }}"
+        data-time="{{ r.arcface.time_ms }}"
+      >
+        <div class="result-header">
+          <div style="display: flex; align-items: center; gap: 12px">
+            <div class="result-index">{{ loop.index }}</div>
+            <div>
+              <div
+                style="font-weight: 600; font-size: 14px; color: var(--text)"
+              >
+                {{ r.image }}
+              </div>
+              <div
+                style="font-size: 12px; color: var(--muted); margin-top: 2px"
+              >
+                Model tốt nhất:
+                <span
+                  style="font-weight: 600; color: {% if r.best_model == 'arcface' %}#2563eb{% elif r.best_model == 'facenet' %}#7c3aed{% else %}#059669{% endif %}"
+                >
+                  {% if r.best_model == 'arcface' %}ArcFace{% elif r.best_model
+                  == 'facenet' %}FaceNet{% else %}LBPH{% endif %}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="best-badge best-badge-{{ r.best_model }}">
+            <svg
+              style="width: 14px; height: 14px"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"
+              ></path>
+            </svg>
+            Xuất sắc nhất
+          </div>
+        </div>
+
+        <div class="model-comparison-grid">
+          <!-- ArcFace -->
+          <div
+            class="model-result-card arcface-border {{ 'highlighted' if r.best_model == 'arcface' }}"
+          >
+            <div class="model-result-header">
+              <div style="display: flex; align-items: center; gap: 8px">
+                <div class="model-icon" style="background: #2563eb">
+                  <span style="color: white; font-weight: 600; font-size: 11px"
+                    >AF</span
+                  >
+                </div>
+                <span style="font-weight: 600; font-size: 13px; color: #2563eb"
+                  >ArcFace</span
+                >
+              </div>
+              {% if r.arcface.status == 'success' %}
+              <span class="status-badge success-badge">OK</span>
+              {% else %}
+              <span class="status-badge error-badge">Err</span>
+              {% endif %}
+            </div>
+            <div class="model-result-body">
+              <div class="result-row">
+                <span class="result-label">Danh tính:</span>
+                <span class="result-value">{{ r.arcface.identity }}</span>
+              </div>
+              <div class="result-row">
+                <span class="result-label">Độ tin cậy:</span>
+                <div class="confidence-bar-container">
+                  <div
+                    class="confidence-bar"
+                    style="width: {{ r.arcface.confidence * 100 }}%; background: #2563eb"
+                  ></div>
+                  <span class="confidence-text"
+                    >{{ "%.1f"|format(r.arcface.confidence * 100) }}%</span
+                  >
+                </div>
+              </div>
+              <div class="result-row">
+                <span class="result-label">Thời gian:</span>
+                <span class="result-value" style="color: #059669"
+                  >{{ r.arcface.time_ms }} ms</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <!-- FaceNet -->
+          <div
+            class="model-result-card facenet-border {{ 'highlighted' if r.best_model == 'facenet' }}"
+          >
+            <div class="model-result-header">
+              <div style="display: flex; align-items: center; gap: 8px">
+                <div class="model-icon" style="background: #7c3aed">
+                  <span style="color: white; font-weight: 600; font-size: 11px"
+                    >FN</span
+                  >
+                </div>
+                <span style="font-weight: 600; font-size: 13px; color: #7c3aed"
+                  >FaceNet</span
+                >
+              </div>
+              {% if r.facenet.status == 'success' %}
+              <span class="status-badge success-badge">OK</span>
+              {% else %}
+              <span class="status-badge error-badge">Err</span>
+              {% endif %}
+            </div>
+            <div class="model-result-body">
+              <div class="result-row">
+                <span class="result-label">Danh tính:</span>
+                <span class="result-value">{{ r.facenet.identity }}</span>
+              </div>
+              <div class="result-row">
+                <span class="result-label">Độ tin cậy:</span>
+                <div class="confidence-bar-container">
+                  <div
+                    class="confidence-bar"
+                    style="width: {{ r.facenet.confidence * 100 }}%; background: #7c3aed"
+                  ></div>
+                  <span class="confidence-text"
+                    >{{ "%.1f"|format(r.facenet.confidence * 100) }}%</span
+                  >
+                </div>
+              </div>
+              <div class="result-row">
+                <span class="result-label">Distance:</span>
+                <span class="result-value" style="color: #f59e0b"
+                  >{{ "%.3f"|format(r.facenet.distance) }}</span
+                >
+              </div>
+              <div class="result-row">
+                <span class="result-label">Thời gian:</span>
+                <span class="result-value" style="color: #059669"
+                  >{{ r.facenet.time_ms }} ms</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <!-- LBPH -->
+          <div
+            class="model-result-card lbph-border {{ 'highlighted' if r.best_model == 'lbph' }}"
+          >
+            <div class="model-result-header">
+              <div style="display: flex; align-items: center; gap: 8px">
+                <div class="model-icon" style="background: #059669">
+                  <span style="color: white; font-weight: 600; font-size: 11px"
+                    >LB</span
+                  >
+                </div>
+                <span style="font-weight: 600; font-size: 13px; color: #059669"
+                  >LBPH</span
+                >
+              </div>
+              {% if r.lbph.status == 'success' %}
+              <span class="status-badge success-badge">OK</span>
+              {% else %}
+              <span class="status-badge error-badge">Err</span>
+              {% endif %}
+            </div>
+            <div class="model-result-body">
+              <div class="result-row">
+                <span class="result-label">Danh tính:</span>
+                <span class="result-value">{{ r.lbph.identity }}</span>
+              </div>
+              <div class="result-row">
+                <span class="result-label">Độ tin cậy:</span>
+                <div class="confidence-bar-container">
+                  <div
+                    class="confidence-bar"
+                    style="width: {{ r.lbph.confidence * 100 }}%; background: #059669"
+                  ></div>
+                  <span class="confidence-text"
+                    >{{ "%.1f"|format(r.lbph.confidence * 100) }}%</span
+                  >
+                </div>
+              </div>
+              <div class="result-row">
+                <span class="result-label">Distance:</span>
+                <span class="result-value" style="color: #f59e0b"
+                  >{{ "%.2f"|format(r.lbph.distance) }}</span
+                >
+              </div>
+              <div class="result-row">
+                <span class="result-label">Thời gian:</span>
+                <span class="result-value" style="color: #059669"
+                  >{{ r.lbph.time_ms }} ms</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
   </div>
   {% endif %}
 </div>
 
-{% endblock %}
+<style>
+  .upload-zone {
+    border: 3px dashed var(--border);
+    border-radius: 16px;
+    padding: 60px 40px;
+    text-align: center;
+    background: linear-gradient(
+      135deg,
+      rgba(37, 99, 235, 0.02) 0%,
+      rgba(37, 99, 235, 0.05) 100%
+    );
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+
+  .upload-zone:hover,
+  .upload-zone.drag-over {
+    border-color: var(--primary);
+    background: linear-gradient(
+      135deg,
+      rgba(37, 99, 235, 0.05) 0%,
+      rgba(37, 99, 235, 0.1) 100%
+    );
+    transform: translateY(-2px);
+  }
+
+  .upload-label {
+    display: inline-block;
+    padding: 10px 24px;
+    background: var(--primary);
+    color: white;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .upload-label:hover {
+    background: var(--primary-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  }
+
+  .thumbnail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 16px;
+  }
+
+  .thumbnail-item {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 2px solid var(--border);
+    aspect-ratio: 1;
+    transition: all 0.2s ease;
+  }
+
+  .thumbnail-item:hover {
+    border-color: var(--primary);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.2);
+  }
+
+  .thumbnail-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .thumbnail-remove {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: rgba(239, 68, 68, 0.95);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .thumbnail-remove:hover {
+    background: #dc2626;
+    transform: scale(1.1);
+  }
+
+  .btn-secondary {
+    background: white;
+    color: var(--primary);
+    border: 2px solid var(--primary);
+    padding: 8px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .btn-secondary:hover {
+    background: var(--primary);
+    color: white;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    transition: all 0.3s ease;
+  }
+
+  .stat-card:hover {
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+    transform: translateY(-2px);
+  }
+
+  .stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .stat-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .sort-select {
+    padding: 8px 16px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    background: white;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .sort-select:hover {
+    border-color: var(--primary);
+  }
+
+  .result-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 20px;
+    transition: all 0.3s ease;
+  }
+
+  .result-card:hover {
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+  }
+
+  .result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .result-index {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(
+      135deg,
+      var(--primary) 0%,
+      var(--primary-light) 100%
+    );
+    color: white;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 16px;
+  }
+
+  .best-badge {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .best-badge-arcface {
+    background: #dbeafe;
+    color: #2563eb;
+  }
+
+  .best-badge-facenet {
+    background: #ede9fe;
+    color: #7c3aed;
+  }
+
+  .best-badge-lbph {
+    background: #d1fae5;
+    color: #059669;
+  }
+
+  .model-comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .model-result-card {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 16px;
+    border: 2px solid transparent;
+    transition: all 0.3s ease;
+  }
+
+  .model-result-card.highlighted {
+    background: white;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  }
+
+  .arcface-border.highlighted {
+    border-color: #2563eb;
+  }
+
+  .facenet-border.highlighted {
+    border-color: #7c3aed;
+  }
+
+  .lbph-border.highlighted {
+    border-color: #059669;
+  }
+
+  .model-result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+
+  .model-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .status-badge {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .success-badge {
+    background: #dcfce7;
+    color: #16a34a;
+  }
+
+  .error-badge {
+    background: #fee2e2;
+    color: #dc2626;
+  }
+
+  .model-result-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .result-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+  }
+
+  .result-label {
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  .result-value {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .confidence-bar-container {
+    flex: 1;
+    margin-left: 12px;
+    height: 22px;
+    background: #e5e7eb;
+    border-radius: 11px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .confidence-bar {
+    height: 100%;
+    border-radius: 11px;
+    transition: width 0.5s ease;
+    position: relative;
+  }
+
+  .confidence-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text);
+    z-index: 1;
+  }
+
+  .chart-container {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px var(--shadow);
+    transition: all 0.3s ease;
+  }
+
+  .chart-container:hover {
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+    transform: translateY(-2px);
+  }
+
+  @media (max-width: 1024px) {
+    .model-comparison-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<script>
+  let selectedFiles = [];
+
+  const uploadZone = document.getElementById("uploadZone");
+  const uploadLabel = document.getElementById("uploadLabel");
+  const imageInput = document.getElementById("imageInput");
+  const previewContainer = document.getElementById("previewContainer");
+  const thumbnailGrid = document.getElementById("thumbnailGrid");
+  const imageCount = document.getElementById("imageCount");
+  const form = document.getElementById("batchForm");
+  const submitBtn = document.getElementById("submitBtn");
+  const loadingIndicator = document.getElementById("loadingIndicator");
+  const processingCount = document.getElementById("processingCount");
+
+  // Chỉ cho phép label trigger file input, không dùng uploadZone click
+  uploadLabel.addEventListener("click", (e) => {
+    e.stopPropagation(); // Ngăn event bubbling
+  });
+
+  uploadZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    uploadZone.classList.add("drag-over");
+  });
+
+  uploadZone.addEventListener("dragleave", () => {
+    uploadZone.classList.remove("drag-over");
+  });
+
+  uploadZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove("drag-over");
+    const files = Array.from(e.dataTransfer.files).filter((f) =>
+      f.type.startsWith("image/")
+    );
+    handleFiles(files);
+  });
+
+  imageInput.addEventListener("change", (e) => {
+    const files = Array.from(e.target.files);
+    handleFiles(files);
+  });
+
+  function handleFiles(files) {
+    selectedFiles = selectedFiles.concat(files);
+    updatePreview();
+  }
+
+  function updatePreview() {
+    if (selectedFiles.length === 0) {
+      previewContainer.style.display = "none";
+      return;
+    }
+
+    previewContainer.style.display = "block";
+    imageCount.textContent = selectedFiles.length;
+    thumbnailGrid.innerHTML = "";
+
+    selectedFiles.forEach((file, index) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const div = document.createElement("div");
+        div.className = "thumbnail-item";
+        div.innerHTML = `
+        <img src="${e.target.result}" alt="${file.name}">
+        <button type="button" class="thumbnail-remove" onclick="removeImage(${index})">×</button>
+      `;
+        thumbnailGrid.appendChild(div);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function removeImage(index) {
+    selectedFiles.splice(index, 1);
+    updatePreview();
+  }
+
+  function clearImages() {
+    selectedFiles = [];
+    imageInput.value = "";
+    updatePreview();
+  }
+
+  form.addEventListener("submit", function (e) {
+    if (selectedFiles.length === 0) {
+      e.preventDefault();
+      alert("Vui lòng chọn ít nhất 1 ảnh!");
+      return;
+    }
+
+    const dataTransfer = new DataTransfer();
+    selectedFiles.forEach((file) => dataTransfer.items.add(file));
+    imageInput.files = dataTransfer.files;
+
+    submitBtn.style.display = "none";
+    loadingIndicator.style.display = "block";
+    processingCount.textContent = selectedFiles.length;
+  });
+
+  function sortResults() {
+    const sortValue = document.getElementById("sortSelect").value;
+    const container = document.getElementById("resultsContainer");
+    const cards = Array.from(container.children);
+
+    cards.sort((a, b) => {
+      if (sortValue === "confidence") {
+        return (
+          parseFloat(b.dataset.confidence) - parseFloat(a.dataset.confidence)
+        );
+      } else if (sortValue === "time") {
+        return parseFloat(a.dataset.time) - parseFloat(b.dataset.time);
+      }
+      return 0;
+    });
+
+    if (sortValue !== "original") {
+      cards.forEach((card) => container.appendChild(card));
+    }
+  }
+</script>
+
+{% if results %}
+<script>
+    // Chart Data Preparation
+    const results = {{ results | tojson }};
+
+    // Calculate metrics
+    const arcfaceConfidences = results.map(r => r.arcface.confidence * 100);
+    const facenetConfidences = results.map(r => r.facenet.confidence * 100);
+    const lbphConfidences = results.map(r => r.lbph.confidence * 100);
+
+    const arcfaceTimes = results.map(r => r.arcface.time_ms);
+    const facenetTimes = results.map(r => r.facenet.time_ms);
+    const lbphTimes = results.map(r => r.lbph.time_ms);
+
+    const arcfaceAvgConf = arcfaceConfidences.reduce((a, b) => a + b, 0) / arcfaceConfidences.length;
+    const facenetAvgConf = facenetConfidences.reduce((a, b) => a + b, 0) / facenetConfidences.length;
+    const lbphAvgConf = lbphConfidences.reduce((a, b) => a + b, 0) / lbphConfidences.length;
+
+    const arcfaceAvgTime = arcfaceTimes.reduce((a, b) => a + b, 0) / arcfaceTimes.length;
+    const facenetAvgTime = facenetTimes.reduce((a, b) => a + b, 0) / facenetTimes.length;
+    const lbphAvgTime = lbphTimes.reduce((a, b) => a + b, 0) / lbphTimes.length;
+
+    const arcfaceSuccess = results.filter(r => r.arcface.status === 'success').length / results.length * 100;
+    const facenetSuccess = results.filter(r => r.facenet.status === 'success').length / results.length * 100;
+    const lbphSuccess = results.filter(r => r.lbph.status === 'success').length / results.length * 100;
+
+    // Chart 1: Confidence Comparison
+    new Chart(document.getElementById('confidenceChart'), {
+      type: 'bar',
+      data: {
+        labels: ['ArcFace', 'FaceNet', 'LBPH'],
+        datasets: [{
+          label: 'Độ tin cậy trung bình (%)',
+          data: [arcfaceAvgConf, facenetAvgConf, lbphAvgConf],
+          backgroundColor: ['#2563eb', '#7c3aed', '#059669'],
+          borderRadius: 8,
+          barThickness: 60
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 2,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (context) => `${context.parsed.y.toFixed(1)}%`
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
+            ticks: {
+              callback: (value) => value + '%'
+            },
+            grid: { color: '#f1f5f9' }
+          },
+          x: {
+            grid: { display: false }
+          }
+        }
+      }
+    });
+
+    // Chart 2: Processing Time
+    new Chart(document.getElementById('timeChart'), {
+      type: 'bar',
+      data: {
+        labels: ['ArcFace', 'FaceNet', 'LBPH'],
+        datasets: [{
+          label: 'Thời gian (ms)',
+          data: [arcfaceAvgTime, facenetAvgTime, lbphAvgTime],
+          backgroundColor: ['#2563eb', '#7c3aed', '#059669'],
+          borderRadius: 8,
+          barThickness: 60
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 2,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (context) => `${context.parsed.y.toFixed(1)} ms`
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: (value) => value + ' ms'
+            },
+            grid: { color: '#f1f5f9' }
+          },
+          x: {
+            grid: { display: false }
+          }
+        }
+      }
+    });
+
+    // Chart 3: Success Rate
+  new Chart(document.getElementById('successRateChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['ArcFace', 'FaceNet', 'LBPH'],
+      datasets: [{
+        data: [arcfaceSuccess, facenetSuccess, lbphSuccess],
+        backgroundColor: ['#2563eb', '#7c3aed', '#059669'],
+        borderWidth: 3,
+        borderColor: '#fff'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      aspectRatio: 2,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            padding: 15,
+            font: { size: 12, weight: '600' }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: (context) => `${context.label}: ${context.parsed.toFixed(1)}%`
+          }
+        }
+      }
+    }
+  });
+    // Chart 4: Confidence Distribution (Box Plot style with range bars)
+    // Create bins for distribution
+    function createBins(data, binCount = 5) {
+      const bins = Array(binCount).fill(0);
+      data.forEach(val => {
+        const binIndex = Math.min(Math.floor(val / (100 / binCount)), binCount - 1);
+        bins[binIndex]++;
+      });
+      return bins;
+    }
+
+    const arcfaceBins = createBins(arcfaceConfidences);
+    const facenetBins = createBins(facenetConfidences);
+    const lbphBins = createBins(lbphConfidences);
+
+    new Chart(document.getElementById('distributionChart'), {
+      type: 'line',
+      data: {
+        labels: ['0-20%', '20-40%', '40-60%', '60-80%', '80-100%'],
+        datasets: [
+          {
+            label: 'ArcFace',
+            data: arcfaceBins,
+            borderColor: '#2563eb',
+            backgroundColor: 'rgba(37, 99, 235, 0.1)',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 4,
+            pointHoverRadius: 6
+          },
+          {
+            label: 'FaceNet',
+            data: facenetBins,
+            borderColor: '#7c3aed',
+            backgroundColor: 'rgba(124, 58, 237, 0.1)',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 4,
+            pointHoverRadius: 6
+          },
+          {
+            label: 'LBPH',
+            data: lbphBins,
+            borderColor: '#059669',
+            backgroundColor: 'rgba(5, 150, 105, 0.1)',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 4,
+            pointHoverRadius: 6
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 2,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              padding: 15,
+              font: { size: 12, weight: '600' }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: (context) => `${context.dataset.label}: ${context.parsed.y} ảnh`
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1,
+              callback: (value) => Math.floor(value)
+            },
+            grid: { color: '#f1f5f9' }
+          },
+          x: {
+            grid: { display: false }
+          }
+        }
+      }
+    });
+</script>
+{% endif %} {% endblock %} ```

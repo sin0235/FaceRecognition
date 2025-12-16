@@ -501,13 +501,11 @@ def home():
 
 @app.route("/batch", methods=["GET", "POST"])
 def batch():
-    """Batch processing với chọn model"""
+    """Batch processing với cả 3 models đồng thời"""
     results = []
-    model_type = "arcface"
 
     if request.method == "POST":
         files = request.files.getlist("images")
-        model_type = request.form.get("model", "arcface")
 
         for file in files:
             if file and file.filename:
@@ -518,23 +516,55 @@ def batch():
                 file.save(temp_path)
 
                 try:
-                    if model_type == "facenet":
-                        rec = recognize_with_facenet(temp_path)
-                    elif model_type == "lbph":
-                        rec = recognize_with_lbph(temp_path)
-                    else:
-                        rec = recognize_with_arcface(temp_path)
+                    # Chạy cả 3 models
+                    arcface_result = recognize_with_arcface(temp_path, threshold=0.65)
+                    facenet_result = recognize_with_facenet(temp_path, threshold=0.65)
+                    lbph_result = recognize_with_lbph(temp_path)
                     
-                    results.append({
+                    # Tổng hợp kết quả
+                    result_item = {
                         "image": file.filename,
-                        "name": rec.get("identity", "Error") if rec.get("status") == "success" else "Error",
-                        "score": rec.get("confidence", 0.0)
-                    })
+                        "arcface": {
+                            "identity": arcface_result.get("identity", "Error"),
+                            "confidence": arcface_result.get("confidence", 0.0),
+                            "time_ms": arcface_result.get("time_ms", 0),
+                            "status": arcface_result.get("status", "error")
+                        },
+                        "facenet": {
+                            "identity": facenet_result.get("identity", "Error"),
+                            "confidence": facenet_result.get("confidence", 0.0),
+                            "distance": facenet_result.get("distance", 0.0),
+                            "time_ms": facenet_result.get("time_ms", 0),
+                            "status": facenet_result.get("status", "error")
+                        },
+                        "lbph": {
+                            "identity": lbph_result.get("identity", "Error"),
+                            "confidence": lbph_result.get("confidence", 0.0),
+                            "distance": lbph_result.get("distance", 0.0),
+                            "time_ms": lbph_result.get("time_ms", 0),
+                            "status": lbph_result.get("status", "error")
+                        }
+                    }
+                    
+                    # Xác định model tốt nhất (highest confidence)
+                    best_model = "arcface"
+                    best_confidence = arcface_result.get("confidence", 0.0)
+                    
+                    if facenet_result.get("confidence", 0.0) > best_confidence:
+                        best_model = "facenet"
+                        best_confidence = facenet_result.get("confidence", 0.0)
+                    
+                    if lbph_result.get("confidence", 0.0) > best_confidence:
+                        best_model = "lbph"
+                    
+                    result_item["best_model"] = best_model
+                    results.append(result_item)
+                    
                 finally:
                     if os.path.exists(temp_path):
                         os.remove(temp_path)
 
-    return render_template("batch.html", active="batch", results=results, model_type=model_type)
+    return render_template("batch.html", active="batch", results=results)
 
 
 @app.route("/evaluation", methods=["GET", "POST"])
