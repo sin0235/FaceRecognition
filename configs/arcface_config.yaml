@@ -11,13 +11,13 @@ model:
 
 # ArcFace Loss - QUAN TRONG: dieu chinh cho so luong classes
 arcface:
-  margin: 0.1 # Bat dau nho, tang dan khi model hoi tu
+  margin: 0.2 # Bat dau nho, tang dan khi model hoi tu
   scale: 64.0 # Gia tri paper goc
   easy_margin: true # De hoi tu hon voi nhieu classes
 
 # Training Configuration
 training:
-  num_epochs: 50
+  num_epochs: 150
   batch_size: 128
   num_workers: 4
 
