@@ -23,7 +23,7 @@ class FaceNetTripletDataset(Dataset):
         self.identities = list(self.id_to_images.keys())
 
         self.transform = transforms.Compose([
-            transforms.Resize((112, 112)),          # resize 112x112
+            transforms.Resize((160, 160)),          # resize 160x160
             transforms.ToTensor(),
             transforms.Normalize(
                 mean=[0.5, 0.5, 0.5],
