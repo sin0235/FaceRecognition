@@ -10,7 +10,7 @@ model:
 
 # Training Configuration
 training:
-  num_epochs: 30
+  num_epochs: 150
   batch_size: 32 # FaceNet cần 3 images/triplet nên batch nhỏ hơn
   num_workers: 4
 
@@ -25,6 +25,10 @@ training:
   # Early stopping
   patience: 12
   warmup_epochs: 3
+
+  # Gradient clipping
+  grad_clip: 1.0
+  use_amp: true
 
 # Data Configuration
 dataset:

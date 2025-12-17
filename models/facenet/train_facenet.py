@@ -60,7 +60,7 @@ def get_gpu_memory_mb():
     return 0
 
 
-def train_one_epoch(model, loader, criterion, optimizer, device, epoch):
+def train_one_epoch(model, loader, criterion, optimizer, device, epoch, grad_clip=None):
     """Train một epoch."""
     model.train()
     total_loss = 0.0
@@ -85,6 +85,10 @@ def train_one_epoch(model, loader, criterion, optimizer, device, epoch):
 
         loss = criterion(emb_a, emb_p, emb_n)
         loss.backward()
+        
+        if grad_clip is not None:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+        
         optimizer.step()
 
         metrics = compute_triplet_metrics(emb_a, emb_p, emb_n)
@@ -265,6 +269,7 @@ def main():
     num_epochs = train_cfg['num_epochs']
     patience = train_cfg.get('patience', 7)
     warmup_epochs = train_cfg.get('warmup_epochs', 0)
+    grad_clip = train_cfg.get('grad_clip', None)
     
     best_val_acc = 0.0
     patience_counter = 0
@@ -295,7 +300,7 @@ def main():
         epoch_start = time.time()
         
         train_metrics = train_one_epoch(
-            model, train_loader, criterion, optimizer, device, epoch
+            model, train_loader, criterion, optimizer, device, epoch, grad_clip
         )
 
         val_metrics = validate(
