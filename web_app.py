@@ -4,7 +4,8 @@ Tich hop ArcFace, FaceNet va LBPH models
 Demo cho mon Xu ly anh so
 """
 
-from flask import Flask, render_template, request, session
+from flask import Flask, render_template, request, session, Response, jsonify
+import threading
 import os
 import sys
 import cv2
@@ -114,6 +115,7 @@ def before_request():
 atexit.register(cleanup_temp_folder)
 
 arcface_engine = None
+realtime_arcface_engine = None
 facenet_engine = None
 lbph_model = None
 lbph_label_map = None
@@ -138,6 +140,27 @@ def get_arcface_engine():
         except Exception as e:
             print(f"ArcFace error: {e}")
     return arcface_engine
+
+
+def get_realtime_arcface_engine():
+    global realtime_arcface_engine
+    if realtime_arcface_engine is None:
+        try:
+            from inference.recognition_engine import RecognitionEngine
+            model_path = os.path.join(ROOT_DIR, "models/checkpoints/arcface/arcface_best.pth")
+            db_path = os.path.join(ROOT_DIR, "data/embeddings_db.npy")
+            
+            if os.path.exists(model_path):
+                realtime_arcface_engine = RecognitionEngine(
+                    model_path=model_path,
+                    db_path=db_path if os.path.exists(db_path) else None,
+                    threshold=0.5,
+                    use_face_detection=False
+                )
+                print("Realtime ArcFace engine loaded (no face detection)")
+        except Exception as e:
+            print(f"Realtime ArcFace error: {e}")
+    return realtime_arcface_engine
 
 
 def get_facenet_engine():
@@ -770,7 +793,199 @@ def evaluation():
     return render_template("evaluation.html", active="evaluation", metrics=kaggle_metrics, info=info, mode=mode, demo_results=demo_results)
 
 
+# ===== REALTIME FACE RECOGNITION =====
 
+camera = None
+camera_lock = threading.Lock()
+realtime_result = {"identity": None, "confidence": 0.0, "bbox": None}
+realtime_running = False
+realtime_detector = None
+realtime_processing = False
+realtime_model = "arcface"
+
+
+def get_camera():
+    global camera
+    with camera_lock:
+        if camera is None:
+            camera = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+            camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            camera.set(cv2.CAP_PROP_FPS, 30)
+            camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        return camera
+
+
+def release_camera():
+    global camera, realtime_detector
+    with camera_lock:
+        if camera is not None:
+            camera.release()
+            camera = None
+        realtime_detector = None
+
+
+def get_realtime_detector():
+    global realtime_detector
+    if realtime_detector is None:
+        try:
+            from preprocessing.face_detector import FaceDetector
+            realtime_detector = FaceDetector(
+                backend='opencv',
+                device='cpu',
+                confidence_threshold=0.5,
+                select_largest=True
+            )
+        except Exception as e:
+            print(f"Failed to init detector: {e}")
+    return realtime_detector
+
+
+def recognize_frame(frame):
+    """Nhận diện khuôn mặt từ frame"""
+    global realtime_result, realtime_processing, realtime_model
+    
+    if realtime_processing:
+        return
+    
+    realtime_processing = True
+    
+    try:
+        temp_path = os.path.join(app.config["TEMP_FOLDER"], f"realtime_{threading.current_thread().ident}.jpg")
+        cv2.imwrite(temp_path, frame)
+        
+        result = None
+        if realtime_model == "arcface":
+            engine = get_realtime_arcface_engine()
+            if engine is not None:
+                result = engine.recognize(temp_path)
+        elif realtime_model == "facenet":
+            result = recognize_with_facenet(temp_path, threshold=0.5)
+        elif realtime_model == "lbph":
+            result = recognize_with_lbph(temp_path, threshold=80)
+        
+        detector = get_realtime_detector()
+        detection = detector.detect(frame) if detector else None
+        
+        if result and result.get("status") == "success" and result.get("identity") != "Unknown":
+            if detection is not None:
+                bbox = [int(x) for x in detection['bbox']]
+            else:
+                bbox = None
+            
+            realtime_result = {
+                "identity": result.get("identity", "Unknown"),
+                "confidence": result.get("confidence", 0.0),
+                "bbox": bbox
+            }
+        elif detection is not None:
+            realtime_result = {
+                "identity": None,
+                "confidence": 0.0,
+                "bbox": [int(x) for x in detection['bbox']]
+            }
+        else:
+            realtime_result = {"identity": None, "confidence": 0.0, "bbox": None}
+        
+        try:
+            os.remove(temp_path)
+        except:
+            pass
+            
+    except Exception as e:
+        print(f"Realtime recognition error: {e}")
+    finally:
+        realtime_processing = False
+
+
+def generate_frames():
+    """Generator cho video streaming"""
+    global realtime_running
+    
+    frame_count = 0
+    realtime_running = True
+    last_recognition_time = 0
+    recognition_interval = 0.5
+    
+    while realtime_running:
+        cam = get_camera()
+        if cam is None:
+            break
+            
+        success, frame = cam.read()
+        if not success:
+            break
+        
+        frame = cv2.flip(frame, 1)
+        
+        current_time = time.time()
+        if current_time - last_recognition_time >= recognition_interval and not realtime_processing:
+            threading.Thread(target=recognize_frame, args=(frame.copy(),), daemon=True).start()
+            last_recognition_time = current_time
+        
+        if realtime_result["bbox"] is not None:
+            x1, y1, x2, y2 = realtime_result["bbox"]
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (16, 185, 129), 2)
+            
+            identity = realtime_result["identity"]
+            confidence = realtime_result["confidence"]
+            
+            if identity and identity != "Unknown":
+                label = f"{identity}: {confidence:.2f}"
+                cv2.putText(frame, label, (x1, y1 - 10), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (16, 185, 129), 2)
+            else:
+                cv2.putText(frame, "Unknown", (x1, y1 - 10),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        
+        frame_count += 1
+        
+        ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        if not ret:
+            continue
+            
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+
+
+@app.route("/realtime")
+def realtime():
+    """Trang nhận diện khuôn mặt realtime"""
+    return render_template("realtime.html", active="realtime")
+
+
+@app.route("/video_feed")
+def video_feed():
+    """Video streaming endpoint"""
+    return Response(generate_frames(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+@app.route("/realtime_result")
+def get_realtime_result():
+    """API endpoint để lấy kết quả recognition hiện tại"""
+    return jsonify(realtime_result)
+
+
+@app.route("/stop_camera", methods=["POST"])
+def stop_camera():
+    """Dừng camera"""
+    global realtime_running
+    realtime_running = False
+    release_camera()
+    return jsonify({"status": "stopped"})
+
+
+@app.route("/set_realtime_model", methods=["POST"])
+def set_realtime_model():
+    """Thay đổi model cho realtime recognition"""
+    global realtime_model
+    data = request.get_json()
+    model = data.get("model", "arcface")
+    if model in ["arcface", "facenet", "lbph"]:
+        realtime_model = model
+        return jsonify({"status": "success", "model": model})
+    return jsonify({"status": "error", "message": "Invalid model"})
 
 
 if __name__ == "__main__":

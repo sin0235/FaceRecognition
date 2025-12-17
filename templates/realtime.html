@@ -1,0 +1,719 @@
+{% extends "base.html" %} {% block content %}
+<div class="card realtime-card">
+  <h2>Nhận Diện Khuôn Mặt Realtime</h2>
+  <p class="subtitle">
+    Sử dụng webcam để nhận diện khuôn mặt theo thời gian thực với ArcFace
+  </p>
+
+  <div class="realtime-container">
+    <div class="video-section">
+      <div class="video-wrapper" id="videoWrapper">
+        <div class="video-placeholder" id="videoPlaceholder">
+          <svg
+            width="64"
+            height="64"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+          >
+            <path d="M23 7l-7 5 7 5V7z"></path>
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+          </svg>
+          <p>Camera chưa được bật</p>
+          <p class="hint">Nhấn nút bên dưới để khởi động camera</p>
+        </div>
+        <img id="videoFeed" src="" alt="Video Feed" style="display: none" />
+      </div>
+
+      <div class="video-controls">
+        <button class="btn-toggle" id="btnToggle" onclick="toggleCamera()">
+          <span class="btn-icon" id="btnIcon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+          </span>
+        </button>
+      </div>
+    </div>
+
+    <div class="result-section">
+      <div class="model-selector-panel">
+        <h4>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+            <path d="M2 17l10 5 10-5"></path>
+            <path d="M2 12l10 5 10-5"></path>
+          </svg>
+          Chọn Model
+        </h4>
+        <div class="model-options">
+          <label class="model-option selected" id="optArcFace">
+            <input
+              type="radio"
+              name="model"
+              value="arcface"
+              checked
+              onchange="changeModel('arcface')"
+            />
+            <span class="model-radio"></span>
+            <span class="model-name">ArcFace</span>
+            <span class="model-badge best">Tốt nhất</span>
+          </label>
+          <label class="model-option" id="optFaceNet">
+            <input
+              type="radio"
+              name="model"
+              value="facenet"
+              onchange="changeModel('facenet')"
+            />
+            <span class="model-radio"></span>
+            <span class="model-name">FaceNet</span>
+          </label>
+          <label class="model-option" id="optLBPH">
+            <input
+              type="radio"
+              name="model"
+              value="lbph"
+              onchange="changeModel('lbph')"
+            />
+            <span class="model-radio"></span>
+            <span class="model-name">LBPH</span>
+            <span class="model-badge fast">Nhanh</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="result-panel">
+        <h3>
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          Kết Quả Nhận Diện
+        </h3>
+
+        <div class="result-item identity-result">
+          <span class="result-label">Danh tính</span>
+          <span class="result-value" id="identityValue">--</span>
+        </div>
+
+        <div class="result-item confidence-result">
+          <span class="result-label">Độ tin cậy</span>
+          <div class="confidence-bar-wrapper">
+            <div
+              class="confidence-bar"
+              id="confidenceBar"
+              style="width: 0%"
+            ></div>
+          </div>
+          <span class="result-value" id="confidenceValue">0%</span>
+        </div>
+
+        <div class="result-item status-result">
+          <span class="result-label">Trạng thái</span>
+          <span class="status-badge" id="statusBadge">
+            <span class="status-dot"></span>
+            Chờ khởi động
+          </span>
+        </div>
+      </div>
+
+      <div class="info-panel">
+        <h4>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          Hướng dẫn sử dụng
+        </h4>
+        <ul>
+          <li>Đảm bảo khuôn mặt nằm trong khung hình</li>
+          <li>Ánh sáng đầy đủ để nhận diện tốt hơn</li>
+          <li>Khuôn mặt phải có trong database đã đăng ký</li>
+          <li>Có thể đổi model trong khi camera đang chạy</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .realtime-card {
+    max-width: 1100px;
+  }
+
+  .realtime-container {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 32px;
+    margin-top: 24px;
+  }
+
+  .video-section {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .video-wrapper {
+    position: relative;
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    border-radius: 16px;
+    overflow: hidden;
+    aspect-ratio: 4/3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--border);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
+  }
+
+  .video-placeholder {
+    text-align: center;
+    color: var(--muted);
+  }
+
+  .video-placeholder svg {
+    margin-bottom: 16px;
+    opacity: 0.5;
+    color: var(--primary);
+  }
+
+  .video-placeholder p {
+    margin: 4px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .video-placeholder .hint {
+    font-size: 13px;
+    font-weight: 400;
+    opacity: 0.7;
+    color: var(--muted);
+  }
+
+  #videoFeed {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .video-controls {
+    display: flex;
+    justify-content: center;
+  }
+
+  .btn-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+    background: var(--primary);
+    color: white;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+  }
+
+  .btn-toggle:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+    background: var(--primary-dark);
+  }
+
+  .btn-toggle.running {
+    background: var(--error);
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+  }
+
+  .btn-toggle.running:hover {
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+    background: #dc2626;
+  }
+
+  .btn-toggle:active {
+    transform: scale(0.95);
+  }
+
+  .btn-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .result-section {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .result-panel {
+    background: linear-gradient(
+      135deg,
+      rgba(37, 99, 235, 0.03) 0%,
+      rgba(37, 99, 235, 0.08) 100%
+    );
+    border: 1px solid rgba(37, 99, 235, 0.15);
+    border-radius: 16px;
+    padding: 24px;
+  }
+
+  .result-panel h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .result-panel h3 svg {
+    opacity: 0.8;
+  }
+
+  .result-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .result-item:last-child {
+    margin-bottom: 0;
+  }
+
+  .result-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .result-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .identity-result .result-value {
+    color: var(--primary);
+  }
+
+  .confidence-bar-wrapper {
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .confidence-bar {
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      var(--primary) 0%,
+      var(--primary-light) 100%
+    );
+    border-radius: 4px;
+    transition: width 0.3s ease;
+  }
+
+  .confidence-result .result-value {
+    font-size: 18px;
+    color: var(--primary);
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--border);
+    color: var(--muted);
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    width: fit-content;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .status-badge.active {
+    background: rgba(37, 99, 235, 0.15);
+    color: var(--primary);
+  }
+
+  .status-badge.active .status-dot {
+    background: var(--primary);
+    animation: pulse 1.5s infinite;
+  }
+
+  .status-badge.detecting {
+    background: rgba(245, 158, 11, 0.15);
+    color: #d97706;
+  }
+
+  .status-badge.success {
+    background: rgba(16, 185, 129, 0.15);
+    color: #059669;
+  }
+
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  .info-panel {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+  }
+
+  .info-panel h4 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .info-panel h4 svg {
+    color: var(--primary);
+  }
+
+  .info-panel ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .info-panel li {
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding: 8px 0;
+    padding-left: 20px;
+    position: relative;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .info-panel li:last-child {
+    border-bottom: none;
+  }
+
+  .info-panel li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 6px;
+    background: var(--primary);
+    border-radius: 50%;
+  }
+
+  /* Model Selector */
+  .model-selector-panel {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+  }
+
+  .model-selector-panel h4 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .model-selector-panel h4 svg {
+    color: var(--primary);
+  }
+
+  .model-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .model-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+  }
+
+  .model-option:hover {
+    border-color: var(--primary);
+    background: rgba(37, 99, 235, 0.03);
+  }
+
+  .model-option.selected {
+    border-color: var(--primary);
+    background: rgba(37, 99, 235, 0.08);
+  }
+
+  .model-option input[type="radio"] {
+    display: none;
+  }
+
+  .model-radio {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border);
+    border-radius: 50%;
+    position: relative;
+    transition: all 0.2s ease;
+  }
+
+  .model-option.selected .model-radio {
+    border-color: var(--primary);
+  }
+
+  .model-option.selected .model-radio::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    background: var(--primary);
+    border-radius: 50%;
+  }
+
+  .model-name {
+    font-weight: 600;
+    color: var(--text);
+    flex: 1;
+  }
+
+  .model-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+
+  .model-badge.best {
+    background: rgba(37, 99, 235, 0.15);
+    color: var(--primary);
+  }
+
+  .model-badge.fast {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--success);
+  }
+
+  @media (max-width: 900px) {
+    .realtime-container {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<script>
+  let isRunning = false;
+  let resultInterval = null;
+  let currentModel = "arcface";
+
+  function toggleCamera() {
+    if (isRunning) {
+      stopCamera();
+    } else {
+      startCamera();
+    }
+  }
+
+  function startCamera() {
+    const videoFeed = document.getElementById("videoFeed");
+    const placeholder = document.getElementById("videoPlaceholder");
+    const btnToggle = document.getElementById("btnToggle");
+    const btnIcon = document.getElementById("btnIcon");
+    const statusBadge = document.getElementById("statusBadge");
+
+    videoFeed.src = "/video_feed";
+    videoFeed.style.display = "block";
+    placeholder.style.display = "none";
+
+    btnToggle.classList.add("running");
+    btnIcon.innerHTML = `
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+        <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+      </svg>
+    `;
+
+    statusBadge.innerHTML = '<span class="status-dot"></span>Đang chạy';
+    statusBadge.className = "status-badge active";
+
+    isRunning = true;
+
+    resultInterval = setInterval(updateResult, 500);
+  }
+
+  function stopCamera() {
+    const videoFeed = document.getElementById("videoFeed");
+    const placeholder = document.getElementById("videoPlaceholder");
+    const btnToggle = document.getElementById("btnToggle");
+    const btnIcon = document.getElementById("btnIcon");
+    const statusBadge = document.getElementById("statusBadge");
+
+    fetch("/stop_camera", { method: "POST" }).then(() => {
+      videoFeed.src = "";
+      videoFeed.style.display = "none";
+      placeholder.style.display = "block";
+
+      btnToggle.classList.remove("running");
+      btnIcon.innerHTML = `
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        </svg>
+      `;
+
+      statusBadge.innerHTML = '<span class="status-dot"></span>Đã dừng';
+      statusBadge.className = "status-badge";
+
+      isRunning = false;
+
+      if (resultInterval) {
+        clearInterval(resultInterval);
+        resultInterval = null;
+      }
+
+      document.getElementById("identityValue").textContent = "--";
+      document.getElementById("confidenceValue").textContent = "0%";
+      document.getElementById("confidenceBar").style.width = "0%";
+    });
+  }
+
+  function updateResult() {
+    if (!isRunning) return;
+
+    fetch("/realtime_result")
+      .then((res) => res.json())
+      .then((data) => {
+        const identityEl = document.getElementById("identityValue");
+        const confidenceEl = document.getElementById("confidenceValue");
+        const confidenceBar = document.getElementById("confidenceBar");
+        const statusBadge = document.getElementById("statusBadge");
+
+        if (data.identity && data.identity !== "Unknown") {
+          identityEl.textContent = data.identity;
+          identityEl.style.color = "var(--success)";
+
+          const conf = Math.round((data.confidence || 0) * 100);
+          confidenceEl.textContent = conf + "%";
+          confidenceBar.style.width = conf + "%";
+
+          statusBadge.innerHTML =
+            '<span class="status-dot"></span>Đã nhận diện';
+          statusBadge.className = "status-badge success";
+        } else if (data.bbox) {
+          identityEl.textContent = "Không xác định";
+          identityEl.style.color = "var(--warning)";
+
+          confidenceEl.textContent = "0%";
+          confidenceBar.style.width = "0%";
+
+          statusBadge.innerHTML =
+            '<span class="status-dot"></span>Phát hiện khuôn mặt';
+          statusBadge.className = "status-badge detecting";
+        } else {
+          identityEl.textContent = "--";
+          identityEl.style.color = "var(--primary)";
+
+          confidenceEl.textContent = "0%";
+          confidenceBar.style.width = "0%";
+
+          statusBadge.innerHTML =
+            '<span class="status-dot"></span>Đang tìm kiếm...';
+          statusBadge.className = "status-badge active";
+        }
+      })
+      .catch((err) => console.error("Error fetching result:", err));
+  }
+
+  window.addEventListener("beforeunload", () => {
+    if (isRunning) {
+      fetch("/stop_camera", { method: "POST" });
+    }
+  });
+
+  function changeModel(model) {
+    currentModel = model;
+
+    document.querySelectorAll(".model-option").forEach((opt) => {
+      opt.classList.remove("selected");
+    });
+
+    const modelNames = {
+      arcface: "ArcFace",
+      facenet: "FaceNet",
+      lbph: "LBPH",
+    };
+
+    if (model === "arcface") {
+      document.getElementById("optArcFace").classList.add("selected");
+    } else if (model === "facenet") {
+      document.getElementById("optFaceNet").classList.add("selected");
+    } else if (model === "lbph") {
+      document.getElementById("optLBPH").classList.add("selected");
+    }
+
+    fetch("/set_realtime_model", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: model }),
+    });
+  }
+</script>
+{% endblock %}
