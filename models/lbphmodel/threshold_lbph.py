@@ -1,13 +1,13 @@
 # TỰ ĐỘNG TÌM THRESHOLD TỐI ƯU (CORE)
 import numpy as np
-from .evaluate import evaluate_lbph
+from .evaluate_lbph import evaluate_lbph
 
 def find_best_threshold(model, val_faces, val_labels):
     best_thr = None
     best_score = -1
 
-    for thr in range(80, 200, 5):
-        acc, reject, _ = evaluate_lbph(
+    for thr in range(40, 121, 5):
+        acc, reject, _, used, coverage = evaluate_lbph(
             model, val_faces, val_labels, thr
         )
 

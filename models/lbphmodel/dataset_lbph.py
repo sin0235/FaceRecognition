@@ -6,7 +6,7 @@ def load_data_no_haar(data_dir):
     faces = []
     labels = []
 
-    for label in sorted(os.listdir(data_dir)):
+    for label in sorted(os.listdir(data_dir), key=lambda x: int(x) if x.isdigit() else x):
         label_path = os.path.join(data_dir, label)
         if not os.path.isdir(label_path):
             continue
