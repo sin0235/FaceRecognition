@@ -1,0 +1,60 @@
+# Config FaceNet Training cho Kaggle
+# Dataset: CelebA_Aligned_Balanced
+# Tối ưu cho GPU 16GB (P100/T4)
+
+# Model Architecture
+model:
+  embedding_size: 512
+  pretrained: "vggface2" # Pretrained weights từ VGGFace2
+  margin: 0.5 # Triplet Loss margin
+
+# Training Configuration
+training:
+  num_epochs: 30
+  batch_size: 32 # FaceNet cần 3 images/triplet nên batch nhỏ hơn
+  num_workers: 8
+
+  learning_rate: 0.0003 # Adam LR
+  optimizer: "adam"
+  weight_decay: 0.0001
+
+  # Scheduler
+  scheduler_step: 10
+  scheduler_gamma: 0.1
+
+  # Early stopping
+  patience: 12
+  warmup_epochs: 3
+
+# Data Configuration
+dataset:
+  mode: folder # Folder-based, không cần CSV
+  image_size: 160 # FaceNet (InceptionResNetV1) yêu cầu 160x160
+
+  # Paths - sẽ được override bởi notebook
+  train_data_root: "data/CelebA_Aligned_Balanced/train"
+  val_data_root: "data/CelebA_Aligned_Balanced/val"
+  test_data_root: "data/CelebA_Aligned_Balanced/test"
+
+  train_csv: "data/CelebA_Aligned_Balanced/metadata/train_labels.csv"
+  val_csv: "data/CelebA_Aligned_Balanced/metadata/val_labels.csv"
+  test_csv: "data/CelebA_Aligned_Balanced/metadata/test_labels.csv"
+
+  normalize:
+    mean: [0.5, 0.5, 0.5]
+    std: [0.5, 0.5, 0.5]
+
+# Checkpointing - Kaggle paths
+checkpoint:
+  save_dir: /kaggle/working/checkpoints/facenet
+  save_best: true
+  save_interval: 1
+  keep_last_n: 2
+
+# Logging
+logging:
+  log_dir: /kaggle/working/logs/facenet
+  log_interval: 10
+
+# Device
+device: cuda

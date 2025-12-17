@@ -11,16 +11,17 @@ training:
   weight_decay: 0.0001
   scheduler_step: 10
   scheduler_gamma: 0.1
+  patience: 7
+  warmup_epochs: 3
+  num_workers: 4
 
 dataset:
-  # FaceNet can 160x160, se resize tu 112x112 khi load
   image_size: 160
-  
-  # Paths moi - tuong thich voi preprocessing output
+
   train_csv: "data/CelebA_Aligned_Balanced/metadata/train_labels.csv"
   val_csv: "data/CelebA_Aligned_Balanced/metadata/val_labels.csv"
   test_csv: "data/CelebA_Aligned_Balanced/metadata/test_labels.csv"
-  
+
   train_data_root: "data/CelebA_Aligned_Balanced/train"
   val_data_root: "data/CelebA_Aligned_Balanced/val"
   test_data_root: "data/CelebA_Aligned_Balanced/test"

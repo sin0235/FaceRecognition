@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from facenet_pytorch import InceptionResnetV1
 
 
@@ -26,15 +27,23 @@ class FaceNetModel(nn.Module):
 
     def forward(self, x):
         """Forward pass: return embeddings."""
-        with torch.no_grad():
-            embeddings = self.model(x)
+        embeddings = self.model(x)
 
         if self.projection is not None:
             embeddings = self.projection(embeddings)
 
-        # Normalize embeddings to unit sphere
-        embeddings = embeddings / embeddings.norm(p=2, dim=1, keepdim=True)
+        embeddings = F.normalize(embeddings, p=2, dim=1)
         return embeddings
+
+    def extract_embedding(self, x):
+        """Inference-only method với no_grad để tiết kiệm memory."""
+        self.eval()
+        with torch.no_grad():
+            return self.forward(x)
+
+    def get_embedding_dim(self):
+        """Return embedding dimension."""
+        return self.target_dim
 
 
 # ---------------------------

@@ -730,21 +730,21 @@ def evaluation():
     }
     
     if request.method == "POST" and mode == "demo":
-        # Lấy test folder từ form hoặc sử dụng mặc định
         test_folder = request.form.get("test_folder", "").strip()
         if not test_folder:
             test_folder = os.path.join(app.config["TEST_DATA_DIR"], "images_aligned")
         
-        # Validate folder exists
+        selected_model = request.form.get("model", "arcface")
+        
         if os.path.exists(test_folder) and os.path.isdir(test_folder):
             y_true = []
             y_pred = []
+            y_pred_top5 = []
             samples = []
+            confidences = []
+            processing_times = []
             
-            # List toàn bộ classes trong folder
             classes = sorted([d for d in os.listdir(test_folder) if os.path.isdir(os.path.join(test_folder, d))])
-            
-            # Giới hạn số ảnh test mỗi class để không quá lâu
             max_images_per_class = int(request.form.get("max_images", 5))
             
             for cls in classes:
@@ -753,12 +753,26 @@ def evaluation():
                 
                 for img_name in images:
                     img_path = os.path.join(cls_path, img_name)
-                    result = recognize_with_arcface(img_path)
+                    
+                    if selected_model == "arcface":
+                        result = recognize_with_arcface(img_path)
+                    elif selected_model == "facenet":
+                        result = recognize_with_facenet(img_path)
+                    else:
+                        result = recognize_with_lbph(img_path)
+                    
                     predicted = result.get("identity", "Unknown") if result.get("status") == "success" else "Unknown"
                     confidence = result.get("confidence", 0)
+                    time_ms = result.get("time_ms", 0)
+                    top_k = result.get("top_k", [])
                     
                     y_true.append(cls)
                     y_pred.append(predicted)
+                    confidences.append(confidence)
+                    processing_times.append(time_ms)
+                    
+                    top5_names = [predicted] + [k[0] for k in top_k[1:5]] if top_k else [predicted]
+                    y_pred_top5.append(top5_names)
                     
                     is_correct = (cls.lower() == predicted.lower())
                     samples.append({
@@ -766,25 +780,37 @@ def evaluation():
                         "true_label": cls,
                         "predicted": predicted,
                         "confidence": confidence,
+                        "time_ms": time_ms,
                         "correct": is_correct
                     })
             
-            # Calculate metrics using helper function
             if y_true and y_pred:
                 metrics = calculate_evaluation_metrics(y_true, y_pred, classes)
                 
+                top5_correct = sum(1 for t, preds in zip(y_true, y_pred_top5) if any(t.lower() == p.lower() for p in preds))
+                top5_accuracy = (top5_correct / len(y_true) * 100) if y_true else 0
+                
+                avg_confidence = sum(confidences) / len(confidences) if confidences else 0
+                avg_time = sum(processing_times) / len(processing_times) if processing_times else 0
+                total_time = sum(processing_times)
+                
                 demo_results = {
                     "accuracy": metrics["accuracy"],
+                    "top5_accuracy": top5_accuracy,
                     "precision": metrics["precision"],
                     "recall": metrics["recall"],
                     "f1": metrics["f1"],
+                    "avg_confidence": avg_confidence * 100,
+                    "avg_time_ms": avg_time,
+                    "total_time_ms": total_time,
                     "confusion_matrix": metrics["confusion_matrix"],
                     "per_class_metrics": metrics["per_class_metrics"],
                     "classes": classes,
                     "samples": samples,
                     "total": len(y_true),
                     "correct": sum(1 for t, p in zip(y_true, y_pred) if t == p),
-                    "wrong": sum(1 for t, p in zip(y_true, y_pred) if t != p)
+                    "wrong": sum(1 for t, p in zip(y_true, y_pred) if t != p),
+                    "model": selected_model
                 }
         else:
             demo_results = {"error": f"Thư mục không tồn tại: {test_folder}"}
