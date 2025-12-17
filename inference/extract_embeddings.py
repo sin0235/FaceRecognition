@@ -668,7 +668,8 @@ def extract_embedding_for_folder(
     model: nn.Module,
     transform,
     device: str = 'cpu',
-    preprocessor: Optional[FacePreprocessor] = None
+    preprocessor = None,
+    model_type: str = 'arcface'
 ) -> Optional[np.ndarray]:
     """
     Trich xuat va tinh trung binh embeddings cho tat ca anh trong folder
@@ -676,10 +677,11 @@ def extract_embedding_for_folder(
     
     Args:
         folder: Thu muc chua anh
-        model: ArcFace model
+        model: ArcFace or FaceNet model
         transform: Image transform
         device: Device
-        preprocessor: FacePreprocessor instance (optional)
+        preprocessor: FacePreprocessor or FaceNetPreprocessor instance (optional)
+        model_type: 'arcface' or 'facenet'
     """
     if not os.path.exists(folder):
         return None
@@ -695,9 +697,9 @@ def extract_embedding_for_folder(
                 processed_img = preprocessor.process(img_path)
             
             if processed_img is not None:
-                emb = extract_embedding_single(processed_img, model, transform, device)
+                emb = extract_embedding_single(processed_img, model, transform, device, model_type)
             else:
-                emb = extract_embedding_single(img_path, model, transform, device)
+                emb = extract_embedding_single(img_path, model, transform, device, model_type)
                 
             if emb is not None:
                 embeddings.append(emb)
@@ -767,7 +769,7 @@ def build_db(
     for person in tqdm(persons, desc="Processing"):
         person_folder = os.path.join(root_folder, person)
         emb = extract_embedding_for_folder(
-            person_folder, model, transform, device, preprocessor
+            person_folder, model, transform, device, preprocessor, model_type
         )
         if emb is not None:
             db[person] = emb
