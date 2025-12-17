@@ -87,8 +87,61 @@ def load_arcface_model(model_path: str, device: str = 'cpu') -> Tuple[nn.Module,
     return model, info
 
 
+def load_facenet_model(model_path: str, device: str = 'cpu') -> Tuple[nn.Module, dict]:
+    """
+    Load trained FaceNet model
+    
+    Args:
+        model_path: Duong dan den file checkpoint (.pth)
+        device: 'cuda' hoac 'cpu'
+        
+    Returns:
+        (model, checkpoint_info)
+    """
+    from models.facenet.facenet_model import FaceNetModel
+    
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model khong ton tai: {model_path}")
+    
+    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+    
+    config = checkpoint.get('config', {})
+    embedding_size = config.get('model', {}).get('embedding_size', 512)
+    
+    model = FaceNetModel(embedding_size=embedding_size, pretrained='vggface2', device=device)
+    
+    if 'model_state_dict' in checkpoint:
+        model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+    elif 'state_dict' in checkpoint:
+        model.load_state_dict(checkpoint['state_dict'], strict=False)
+    
+    model.to(device)
+    model.eval()
+    
+    info = {
+        'embedding_size': embedding_size,
+        'epoch': checkpoint.get('epoch', 'N/A'),
+        'best_val_acc': checkpoint.get('best_val_acc', 'N/A')
+    }
+    
+    print(f"Loaded FaceNet model from {model_path}")
+    print(f"  - Embedding size: {embedding_size}")
+    print(f"  - Epoch: {info['epoch']}")
+    
+    return model, info
+
+
 def get_transform(image_size: int = 112):
     """Transform cho inference"""
+    return transforms.Compose([
+        transforms.Resize((image_size, image_size)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+    ])
+
+
+def get_facenet_transform(image_size: int = 160):
+    """Transform cho FaceNet inference (160x160)"""
     return transforms.Compose([
         transforms.Resize((image_size, image_size)),
         transforms.ToTensor(),
@@ -189,20 +242,81 @@ class FacePreprocessor:
         return None
 
 
+class FaceNetPreprocessor:
+    """
+    Face Preprocessor cho FaceNet: Detect + Crop face (160x160)
+    """
+    
+    def __init__(self, device: str = 'cpu'):
+        self.device = device
+        self.detector = None
+        self._init_detector()
+    
+    def _init_detector(self):
+        try:
+            self.detector = FaceDetector(
+                backend='mtcnn',
+                device=self.device,
+                confidence_threshold=0.9,
+                select_largest=True
+            )
+            print("[OK] FaceNetPreprocessor initialized (MTCNN)")
+        except Exception as e:
+            print(f"[WARN] Khong the khoi tao Face Detector: {e}")
+            self.detector = None
+    
+    def process(self, img_input: Union[str, np.ndarray]) -> Optional[Image.Image]:
+        """
+        Detect va crop face tu anh cho FaceNet
+        
+        Args:
+            img_input: Duong dan anh hoac numpy array BGR
+            
+        Returns:
+            PIL Image da crop (160x160) hoac None
+        """
+        if self.detector is None:
+            if isinstance(img_input, str):
+                img = Image.open(img_input).convert('RGB')
+                return img.resize((160, 160))
+            img = Image.fromarray(cv2.cvtColor(img_input, cv2.COLOR_BGR2RGB))
+            return img.resize((160, 160))
+        
+        if isinstance(img_input, str):
+            image = cv2.imread(img_input)
+            if image is None:
+                return None
+        else:
+            image = img_input
+        
+        detection = self.detector.detect(image)
+        if detection is None:
+            return None
+        
+        cropped = self.detector.crop_face(image, margin=0.2, target_size=(160, 160))
+        if cropped is not None:
+            cropped_rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
+            return Image.fromarray(cropped_rgb)
+        
+        return None
+
+
 def extract_embedding_single(
     img_input,
     model: nn.Module,
     transform,
-    device: str = 'cpu'
+    device: str = 'cpu',
+    model_type: str = 'arcface'
 ) -> Optional[np.ndarray]:
     """
     Trich xuat embedding cho 1 anh
     
     Args:
         img_input: Duong dan anh hoac PIL Image
-        model: ArcFace model
+        model: ArcFace or FaceNet model
         transform: Image transform
         device: Device
+        model_type: 'arcface' or 'facenet'
         
     Returns:
         Embedding vector (numpy array) hoac None neu loi
@@ -216,7 +330,10 @@ def extract_embedding_single(
         img_tensor = transform(img).unsqueeze(0).to(device)
         
         with torch.no_grad():
-            embedding = model(img_tensor, labels=None)
+            if model_type == 'facenet':
+                embedding = model(img_tensor)
+            else:
+                embedding = model(img_tensor, labels=None)
             embedding = F.normalize(embedding, p=2, dim=1)
             embedding = embedding.cpu().numpy().flatten()
         
@@ -600,7 +717,8 @@ def build_db(
     root_folder: str = "data/celeb",
     save_path: str = "data/embeddings_db.npy",
     device: str = None,
-    use_face_detection: bool = True
+    use_face_detection: bool = True,
+    model_type: str = "arcface"
 ) -> None:
     """
     Build embedding database tu folder celebrities
@@ -611,27 +729,31 @@ def build_db(
         save_path: Duong dan luu embeddings_db.npy
         device: 'cuda' hoac 'cpu'
         use_face_detection: Su dung face detection + alignment truoc khi extract
+        model_type: 'arcface' hoac 'facenet'
     """
     print("="*60)
-    print("EXTRACT EMBEDDINGS DATABASE")
+    print(f"EXTRACT EMBEDDINGS DATABASE ({model_type.upper()})")
     print("="*60)
     
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
-    print(f"\nDevice: {device}")
+    print(f"\nModel type: {model_type}")
+    print(f"Device: {device}")
     print(f"Use face detection: {use_face_detection}")
     
     if not os.path.exists(root_folder):
         print(f"Root folder khong ton tai: {root_folder}")
         return
     
-    model, _ = load_arcface_model(model_path, device)
-    transform = get_transform()
-    
-    preprocessor = None
-    if use_face_detection:
-        preprocessor = FacePreprocessor(device=device)
+    if model_type == "facenet":
+        model, _ = load_facenet_model(model_path, device)
+        transform = get_facenet_transform()
+        preprocessor = FaceNetPreprocessor(device=device) if use_face_detection else None
+    else:
+        model, _ = load_arcface_model(model_path, device)
+        transform = get_transform()
+        preprocessor = FacePreprocessor(device=device) if use_face_detection else None
     
     db: Dict[str, np.ndarray] = {}
     
@@ -736,6 +858,8 @@ if __name__ == "__main__":
                        help='Use face detection + alignment before extracting embeddings (default: True)')
     parser.add_argument('--no-face-detection', action='store_true',
                        help='Disable face detection (use raw images)')
+    parser.add_argument('--model-type', type=str, choices=['arcface', 'facenet'], default='arcface',
+                       help='Model type: arcface or facenet (for db mode)')
     
     args = parser.parse_args()
     
@@ -747,7 +871,8 @@ if __name__ == "__main__":
             root_folder=args.data_dir,
             save_path=args.output_path,
             device=args.device,
-            use_face_detection=use_fd
+            use_face_detection=use_fd,
+            model_type=args.model_type
         )
     elif args.mode == 'csv':
         if args.csv_path is None:

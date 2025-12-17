@@ -10,7 +10,7 @@ model:
 
 # ArcFace Loss - DIEU CHINH CHO NHIEU CLASSES
 arcface:
-  margin: 0.15 # Giam manh tu 0.35 - bat dau nho roi tang dan
+  margin: 0.1 # Giam manh tu 0.35 - bat dau nho roi tang dan
   scale: 64.0 # Tang tu 30 len 64 (gia tri paper goc)
   easy_margin: true # Bat easy_margin de de hoi tu hon
 
