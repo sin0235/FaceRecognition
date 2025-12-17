@@ -30,8 +30,53 @@ app.config["TEST_DATA_DIR"] = os.path.join(ROOT_DIR, "data/CelebA_Aligned/test")
 os.makedirs(app.config["TEMP_FOLDER"], exist_ok=True)
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 os.makedirs(app.config["GRADCAM_FOLDER"], exist_ok=True)
+os.makedirs("static/detection_bbox", exist_ok=True)
 
 MAX_FILE_AGE_SECONDS = 3600
+
+
+def draw_face_bbox(image_path, bbox, output_folder="static/detection_bbox"):
+    """
+    Vẽ bounding box màu xanh lá lên ảnh gốc
+    
+    Args:
+        image_path: Đường dẫn ảnh gốc
+        bbox: List [x1, y1, x2, y2]
+        output_folder: Thư mục lưu ảnh output
+        
+    Returns:
+        Path relative của ảnh đã vẽ bbox (để hiển thị trong HTML)
+    """
+    try:
+        if bbox is None:
+            return None
+            
+        image = cv2.imread(image_path)
+        if image is None:
+            return None
+        
+        # Vẽ hình chữ nhật màu xanh lá #10b981 (RGB: 16, 185, 129)
+        # OpenCV dùng BGR nên đảo ngược: (129, 185, 16)
+        color = (129, 185, 16)
+        thickness = 3
+        
+        x1, y1, x2, y2 = [int(coord) for coord in bbox]
+        cv2.rectangle(image, (x1, y1), (x2, y2), color, thickness)
+        
+        # Tạo filename unique
+        unique_id = str(uuid.uuid4())[:8]
+        ext = os.path.splitext(image_path)[1]
+        output_filename = f"bbox_{unique_id}{ext}"
+        output_path = os.path.join(output_folder, output_filename)
+        
+        cv2.imwrite(output_path, image)
+        
+        # Return relative path cho HTML
+        return f"detection_bbox/{output_filename}"
+        
+    except Exception as e:
+        print(f"Draw bbox error: {e}")
+        return None
 
 
 def cleanup_temp_folder():
@@ -321,6 +366,13 @@ def recognize_with_arcface(image_path, threshold=0.5):
     
     face_detection = extract_face_detection_info(image_path)
     
+    # Vẽ bounding box nếu có phát hiện khuôn mặt
+    bbox_image = None
+    if face_detection and face_detection.get("bbox") is not None:
+        bbox_image = draw_face_bbox(image_path, face_detection["bbox"])
+        if face_detection and bbox_image:
+            face_detection["bbox_image"] = bbox_image
+    
     engine.set_threshold(threshold)
     result = engine.recognize(image_path)
     result["time_ms"] = round((time.time() - start_time) * 1000, 2)
@@ -411,6 +463,81 @@ def get_test_data_info():
                 cls_path = os.path.join(path, cls)
                 info[key]["images"] += len([f for f in os.listdir(cls_path) if f.lower().endswith(('.jpg', '.png', '.jpeg'))])
     return info
+
+
+def calculate_evaluation_metrics(y_true, y_pred, labels):
+    """
+    Tính toán các metrics đánh giá và confusion matrix
+    
+    Args:
+        y_true: List các label thật
+        y_pred: List các label dự đoán
+        labels: List tên các classes
+        
+    Returns:
+        Dict chứa accuracy, precision, recall, f1, confusion_matrix
+    """
+    from collections import defaultdict
+    import numpy as np
+    
+    # Convert labels to indices
+    label_to_idx = {label: idx for idx, label in enumerate(labels)}
+    
+    # Build confusion matrix
+    n_classes = len(labels)
+    confusion_matrix = [[0] * n_classes for _ in range(n_classes)]
+    
+    for true_label, pred_label in zip(y_true, y_pred):
+        if true_label in label_to_idx and pred_label in label_to_idx:
+            true_idx = label_to_idx[true_label]
+            pred_idx = label_to_idx[pred_label]
+            confusion_matrix[true_idx][pred_idx] += 1
+    
+    # Calculate overall metrics
+    total = len(y_true)
+    correct = sum(1 for t, p in zip(y_true, y_pred) if t == p)
+    accuracy = (correct / total * 100) if total > 0 else 0
+    
+    # Calculate per-class metrics
+    per_class_metrics = {}
+    precision_list = []
+    recall_list = []
+    f1_list = []
+    
+    for idx, label in enumerate(labels):
+        # True Positives, False Positives, False Negatives
+        tp = confusion_matrix[idx][idx]
+        fp = sum(confusion_matrix[i][idx] for i in range(n_classes)) - tp
+        fn = sum(confusion_matrix[idx][j] for j in range(n_classes)) - tp
+        
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+        
+        per_class_metrics[label] = {
+            'precision': precision,
+            'recall': recall,
+            'f1': f1,
+            'support': sum(confusion_matrix[idx])
+        }
+        
+        precision_list.append(precision)
+        recall_list.append(recall)
+        f1_list.append(f1)
+    
+    # Macro average
+    macro_precision = sum(precision_list) / len(precision_list) if precision_list else 0
+    macro_recall = sum(recall_list) / len(recall_list) if recall_list else 0
+    macro_f1 = sum(f1_list) / len(f1_list) if f1_list else 0
+    
+    return {
+        'accuracy': accuracy,
+        'precision': macro_precision * 100,
+        'recall': macro_recall * 100,
+        'f1': macro_f1 * 100,
+        'confusion_matrix': confusion_matrix,
+        'per_class_metrics': per_class_metrics
+    }
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -580,21 +707,64 @@ def evaluation():
     }
     
     if request.method == "POST" and mode == "demo":
-        test_dir = os.path.join(app.config["TEST_DATA_DIR"], "images_aligned")
-        if os.path.exists(test_dir):
-            demo_results = {"correct": 0, "wrong": 0, "samples": []}
-            classes = [d for d in os.listdir(test_dir) if os.path.isdir(os.path.join(test_dir, d))][:5]
+        # Lấy test folder từ form hoặc sử dụng mặc định
+        test_folder = request.form.get("test_folder", "").strip()
+        if not test_folder:
+            test_folder = os.path.join(app.config["TEST_DATA_DIR"], "images_aligned")
+        
+        # Validate folder exists
+        if os.path.exists(test_folder) and os.path.isdir(test_folder):
+            y_true = []
+            y_pred = []
+            samples = []
+            
+            # List toàn bộ classes trong folder
+            classes = sorted([d for d in os.listdir(test_folder) if os.path.isdir(os.path.join(test_folder, d))])
+            
+            # Giới hạn số ảnh test mỗi class để không quá lâu
+            max_images_per_class = int(request.form.get("max_images", 5))
+            
             for cls in classes:
-                cls_path = os.path.join(test_dir, cls)
-                images = [f for f in os.listdir(cls_path) if f.lower().endswith(('.jpg', '.png'))][:2]
+                cls_path = os.path.join(test_folder, cls)
+                images = [f for f in os.listdir(cls_path) if f.lower().endswith(('.jpg', '.png', '.jpeg'))][:max_images_per_class]
+                
                 for img_name in images:
-                    result = recognize_with_arcface(os.path.join(cls_path, img_name))
-                    predicted = result.get("identity", "Unknown") if result.get("status") == "success" else "Error"
-                    is_correct = cls.lower() in predicted.lower() or predicted.lower() in cls.lower()
-                    demo_results["correct" if is_correct else "wrong"] += 1
-                    demo_results["samples"].append({"image": img_name, "true_label": cls, "predicted": predicted, "confidence": result.get("confidence", 0), "correct": is_correct})
-            total = demo_results["correct"] + demo_results["wrong"]
-            demo_results["accuracy"] = (demo_results["correct"] / total * 100) if total > 0 else 0
+                    img_path = os.path.join(cls_path, img_name)
+                    result = recognize_with_arcface(img_path)
+                    predicted = result.get("identity", "Unknown") if result.get("status") == "success" else "Unknown"
+                    confidence = result.get("confidence", 0)
+                    
+                    y_true.append(cls)
+                    y_pred.append(predicted)
+                    
+                    is_correct = (cls.lower() == predicted.lower())
+                    samples.append({
+                        "image": img_name,
+                        "true_label": cls,
+                        "predicted": predicted,
+                        "confidence": confidence,
+                        "correct": is_correct
+                    })
+            
+            # Calculate metrics using helper function
+            if y_true and y_pred:
+                metrics = calculate_evaluation_metrics(y_true, y_pred, classes)
+                
+                demo_results = {
+                    "accuracy": metrics["accuracy"],
+                    "precision": metrics["precision"],
+                    "recall": metrics["recall"],
+                    "f1": metrics["f1"],
+                    "confusion_matrix": metrics["confusion_matrix"],
+                    "per_class_metrics": metrics["per_class_metrics"],
+                    "classes": classes,
+                    "samples": samples,
+                    "total": len(y_true),
+                    "correct": sum(1 for t, p in zip(y_true, y_pred) if t == p),
+                    "wrong": sum(1 for t, p in zip(y_true, y_pred) if t != p)
+                }
+        else:
+            demo_results = {"error": f"Thư mục không tồn tại: {test_folder}"}
     
     info = get_test_data_info()
     return render_template("evaluation.html", active="evaluation", metrics=kaggle_metrics, info=info, mode=mode, demo_results=demo_results)

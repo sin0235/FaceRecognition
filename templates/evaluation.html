@@ -1,9 +1,9 @@
-{% extends "base.html" %} {% block content %}
+{%extends "base.html" %} {% block content %}
 
 <div class="card animate">
   <h2>Đánh giá Models</h2>
 
-  <!-- Tab buttons -->
+  <!-- Tabs -->
   <div
     style="
       display: flex;
@@ -30,7 +30,7 @@
   </div>
 
   {% if mode == 'kaggle' %}
-  <!-- Kaggle Results -->
+  <!-- Kaggle content giữ nguyên như file cũ -->
   <p class="subtitle">
     Kết quả đánh giá trên Kaggle (notebook: evaluate_arcface.ipynb)
   </p>
@@ -100,7 +100,7 @@
     </div>
   </div>
 
-  <!-- Charts Section -->
+  <!-- Charts -->
   <div
     style="
       display: grid;
@@ -109,15 +109,12 @@
       margin-top: 40px;
     "
   >
-    <!-- Accuracy Chart -->
     <div style="background: #f8fafc; padding: 20px; border-radius: 12px">
       <h3 style="margin-bottom: 15px; text-align: center">
         Accuracy Comparison
       </h3>
       <canvas id="accuracyChart" height="200"></canvas>
     </div>
-
-    <!-- Classification Metrics Chart -->
     <div style="background: #f8fafc; padding: 20px; border-radius: 12px">
       <h3 style="margin-bottom: 15px; text-align: center">
         Classification Metrics
@@ -134,13 +131,10 @@
       margin-top: 30px;
     "
   >
-    <!-- ROC/AUC Chart -->
     <div style="background: #f8fafc; padding: 20px; border-radius: 12px">
       <h3 style="margin-bottom: 15px; text-align: center">AUC-ROC & EER</h3>
       <canvas id="aucChart" height="200"></canvas>
     </div>
-
-    <!-- Performance Chart -->
     <div style="background: #f8fafc; padding: 20px; border-radius: 12px">
       <h3 style="margin-bottom: 15px; text-align: center">
         Performance (Speed)
@@ -149,148 +143,8 @@
     </div>
   </div>
 
-  <!-- Detailed Metrics Table -->
-  <div style="margin-top: 40px">
-    <h3 style="margin-bottom: 15px">Chi tiết Metrics (Kaggle Evaluation)</h3>
-    <table style="width: 100%; border-collapse: collapse; font-size: 0.95em">
-      <thead>
-        <tr style="background: #f3f4f6">
-          <th style="padding: 12px; text-align: left">Metric</th>
-          <th style="padding: 12px; text-align: center; color: #2563eb">
-            ArcFace
-          </th>
-          <th style="padding: 12px; text-align: center; color: #7c3aed">
-            FaceNet
-          </th>
-          <th style="padding: 12px; text-align: center; color: #059669">
-            LBPH
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr style="border-bottom: 1px solid #eee">
-          <td style="padding: 10px">Top-1 Accuracy</td>
-          <td style="text-align: center">
-            <b>{{ metrics.arcface.accuracy }}%</b>
-          </td>
-          <td style="text-align: center">{{ metrics.facenet.accuracy }}%</td>
-          <td style="text-align: center">{{ metrics.lbph.accuracy }}%</td>
-        </tr>
-        <tr style="border-bottom: 1px solid #eee">
-          <td style="padding: 10px">Top-5 Accuracy</td>
-          <td style="text-align: center">
-            <b>{{ metrics.arcface.top5_accuracy }}%</b>
-          </td>
-          <td style="text-align: center">
-            {{ metrics.facenet.top5_accuracy }}%
-          </td>
-          <td style="text-align: center">{{ metrics.lbph.top5_accuracy }}%</td>
-        </tr>
-        <tr style="border-bottom: 1px solid #eee">
-          <td style="padding: 10px">Precision</td>
-          <td style="text-align: center">{{ metrics.arcface.precision }}</td>
-          <td style="text-align: center">{{ metrics.facenet.precision }}</td>
-          <td style="text-align: center">{{ metrics.lbph.precision }}</td>
-        </tr>
-        <tr style="border-bottom: 1px solid #eee">
-          <td style="padding: 10px">Recall</td>
-          <td style="text-align: center">{{ metrics.arcface.recall }}</td>
-          <td style="text-align: center">{{ metrics.facenet.recall }}</td>
-          <td style="text-align: center">{{ metrics.lbph.recall }}</td>
-        </tr>
-        <tr style="border-bottom: 1px solid #eee">
-          <td style="padding: 10px">F1-Score</td>
-          <td style="text-align: center">{{ metrics.arcface.f1 }}</td>
-          <td style="text-align: center">{{ metrics.facenet.f1 }}</td>
-          <td style="text-align: center">{{ metrics.lbph.f1 }}</td>
-        </tr>
-        <tr style="border-bottom: 1px solid #eee">
-          <td style="padding: 10px">AUC (ROC)</td>
-          <td style="text-align: center"><b>{{ metrics.arcface.auc }}</b></td>
-          <td style="text-align: center">{{ metrics.facenet.auc }}</td>
-          <td style="text-align: center">{{ metrics.lbph.auc }}</td>
-        </tr>
-        <tr style="border-bottom: 1px solid #eee">
-          <td style="padding: 10px">EER (Equal Error Rate)</td>
-          <td style="text-align: center"><b>{{ metrics.arcface.eer }}</b></td>
-          <td style="text-align: center">{{ metrics.facenet.eer }}</td>
-          <td style="text-align: center">{{ metrics.lbph.eer }}</td>
-        </tr>
-        <tr style="border-bottom: 1px solid #eee">
-          <td style="padding: 10px">Latency (ms/image)</td>
-          <td style="text-align: center">{{ metrics.arcface.latency_ms }}</td>
-          <td style="text-align: center">{{ metrics.facenet.latency_ms }}</td>
-          <td style="text-align: center">
-            <b>{{ metrics.lbph.latency_ms }}</b>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding: 10px">Throughput (img/s)</td>
-          <td style="text-align: center">{{ metrics.arcface.throughput }}</td>
-          <td style="text-align: center">{{ metrics.facenet.throughput }}</td>
-          <td style="text-align: center">
-            <b>{{ metrics.lbph.throughput }}</b>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- Analysis Section -->
-  <div
-    style="
-      margin-top: 40px;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-    "
-  >
-    <div
-      style="
-        background: #f0fdf4;
-        padding: 20px;
-        border-radius: 12px;
-        border-left: 4px solid #22c55e;
-      "
-    >
-      <h4 style="color: #16a34a; margin-bottom: 10px">Kết luận</h4>
-      <ul style="line-height: 1.8; font-size: 0.95em">
-        <li>
-          <b>ArcFace:</b> Accuracy cao nhất ({{ metrics.arcface.accuracy }}%),
-          AUC tốt nhất ({{ metrics.arcface.auc }})
-        </li>
-        <li><b>FaceNet:</b> Cân bằng accuracy và speed</li>
-        <li>
-          <b>LBPH:</b> Nhanh nhất ({{ metrics.lbph.throughput }} img/s) nhưng
-          accuracy thấp
-        </li>
-      </ul>
-    </div>
-    <div
-      style="
-        background: #fef3c7;
-        padding: 20px;
-        border-radius: 12px;
-        border-left: 4px solid #f59e0b;
-      "
-    >
-      <h4 style="color: #d97706; margin-bottom: 10px">Dataset Info</h4>
-      <ul style="line-height: 1.8; font-size: 0.95em">
-        <li>
-          <b>Aligned:</b> {{ info.aligned.classes }} classes, {{
-          info.aligned.images }} images
-        </li>
-        <li>
-          <b>Original:</b> {{ info.original.classes }} classes, {{
-          info.original.images }} images
-        </li>
-        <li><b>Source:</b> CelebA Dataset</li>
-      </ul>
-    </div>
-  </div>
-
+  <!-- Kaggle JS charts -->
   <script>
-    // Accuracy Comparison Chart
     new Chart(document.getElementById('accuracyChart'), {
       type: 'bar',
       data: {
@@ -314,7 +168,6 @@
       }
     });
 
-    // Classification Metrics Chart (Radar)
     new Chart(document.getElementById('metricsChart'), {
       type: 'radar',
       data: {
@@ -343,7 +196,6 @@
       }
     });
 
-    // AUC & EER Chart
     new Chart(document.getElementById('aucChart'), {
       type: 'bar',
       data: {
@@ -367,7 +219,6 @@
       }
     });
 
-    // Performance Chart
     new Chart(document.getElementById('performanceChart'), {
       type: 'bar',
       data: {
@@ -391,145 +242,335 @@
   </script>
 
   {% else %}
-  <!-- Demo Mode -->
+  <!-- Demo Mode  -->
   <p class="subtitle">Demo đánh giá trực tiếp trên tập test</p>
 
-  <div
-    style="
-      background: #fef3c7;
-      padding: 20px;
-      border-radius: 12px;
-      margin-bottom: 20px;
-    "
+  <!-- Form chọn thư mục  -->
+  <form
+    method="POST"
+    action="/evaluation?mode=demo"
+    style="margin-bottom: 30px"
   >
-    <b>Dataset:</b> {{ info.aligned.classes }} lớp, {{ info.aligned.images }}
-    ảnh (aligned)
-  </div>
+    <div style="background: #f8fafc; padding: 20px; border-radius: 12px">
+      <div style="margin-bottom: 15px">
+        <label style="font-weight: 600; display: block; margin-bottom: 8px"
+          >Thư mục Test:</label
+        >
+        <input
+          type="text"
+          name="test_folder"
+          placeholder="Để trống = mặc định ({{ info.aligned.classes }} classes)"
+          style="
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+          "
+        />
+        <small style="color: #64748b"
+          >Mặc định: data/CelebA_Aligned/test/images_aligned</small
+        >
+      </div>
 
-  <form method="POST" action="/evaluation?mode=demo">
-    <button class="btn" type="submit">
-      Chạy Demo Evaluation (5 classes x 2 images)
-    </button>
+      <div style="margin-bottom: 15px">
+        <label style="font-weight: 600; display: block; margin-bottom: 8px"
+          >Số ảnh mỗi class:</label
+        >
+        <input
+          type="number"
+          name="max_images"
+          value="5"
+          min="1"
+          max="20"
+          style="
+            width: 150px;
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+          "
+        />
+        <small style="color: #64748b">Giới hạn để tránh quá lâu</small>
+      </div>
+
+      <button class="btn" type="submit">Chạy Evaluation</button>
+    </div>
   </form>
 
-  {% if demo_results %}
-  <div style="margin-top: 30px">
-    <h3>Kết quả Demo</h3>
-
+  {% if demo_results %} {% if demo_results.error %}
+  <div
+    style="
+      background: #fef2f2;
+      color: #dc2626;
+      padding: 15px;
+      border-radius: 8px;
+      border-left: 4px solid #dc2626;
+    "
+  >
+    {{ demo_results.error }}
+  </div>
+  {% else %}
+  <!-- Metrics Cards -->
+  <div
+    style="
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+      margin-bottom: 30px;
+    "
+  >
     <div
       style="
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 15px;
-        margin: 20px 0;
+        background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 12px;
+        text-align: center;
       "
     >
-      <div
-        style="
-          background: #dcfce7;
-          padding: 15px;
-          border-radius: 10px;
-          text-align: center;
-        "
-      >
-        <div style="font-size: 1.8em; font-weight: 700; color: #16a34a">
-          {{ demo_results.correct }}
-        </div>
-        <small>Correct</small>
+      <div style="font-size: 2.5em; font-weight: 700">
+        {{ "%.1f"|format(demo_results.accuracy) }}%
       </div>
-      <div
-        style="
-          background: #fee2e2;
-          padding: 15px;
-          border-radius: 10px;
-          text-align: center;
-        "
-      >
-        <div style="font-size: 1.8em; font-weight: 700; color: #dc2626">
-          {{ demo_results.wrong }}
-        </div>
-        <small>Wrong</small>
-      </div>
-      <div
-        style="
-          background: #dbeafe;
-          padding: 15px;
-          border-radius: 10px;
-          text-align: center;
-        "
-      >
-        <div style="font-size: 1.8em; font-weight: 700; color: #2563eb">
-          {{ "%.1f"|format(demo_results.accuracy) }}%
-        </div>
-        <small>Accuracy</small>
-      </div>
+      <small style="opacity: 0.9">Accuracy</small>
     </div>
-
-    <!-- Demo Results Chart -->
-    <div style="max-width: 400px; margin: 20px auto">
-      <canvas id="demoChart"></canvas>
-    </div>
-
-    <table
+    <div
       style="
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.9em;
-        margin-top: 20px;
+        background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 12px;
+        text-align: center;
       "
     >
-      <thead>
-        <tr style="background: #f3f4f6">
-          <th style="padding: 10px; text-align: left">Image</th>
-          <th style="padding: 10px; text-align: left">True Label</th>
-          <th style="padding: 10px; text-align: left">Predicted</th>
-          <th style="padding: 10px; text-align: center">Confidence</th>
-          <th style="padding: 10px; text-align: center">Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for s in demo_results.samples %}
-        <tr
-          style="border-bottom:1px solid #eee; background:{% if s.correct %}#f0fdf4{% else %}#fef2f2{% endif %}"
-        >
-          <td style="padding: 8px">{{ s.image[:25] }}...</td>
-          <td style="padding: 8px">{{ s.true_label }}</td>
-          <td style="padding: 8px">{{ s.predicted }}</td>
-          <td style="padding: 8px; text-align: center">
-            {{ "%.2f"|format(s.confidence) }}
-          </td>
-          <td style="padding: 8px; text-align: center">
-            {% if s.correct %}<span style="color: #16a34a; font-size: 1.2em"
-              >✓</span
-            >{% else %}<span style="color: #dc2626; font-size: 1.2em">✗</span>{%
-            endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+      <div style="font-size: 2.5em; font-weight: 700">
+        {{ "%.1f"|format(demo_results.precision) }}%
+      </div>
+      <small style="opacity: 0.9">Precision</small>
+    </div>
+    <div
+      style="
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 12px;
+        text-align: center;
+      "
+    >
+      <div style="font-size: 2.5em; font-weight: 700">
+        {{ "%.1f"|format(demo_results.recall) }}%
+      </div>
+      <small style="opacity: 0.9">Recall</small>
+    </div>
+    <div
+      style="
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 12px;
+        text-align: center;
+      "
+    >
+      <div style="font-size: 2.5em; font-weight: 700">
+        {{ "%.1f"|format(demo_results.f1) }}%
+      </div>
+      <small style="opacity: 0.9">F1-Score</small>
+    </div>
   </div>
 
-  <script>
-    new Chart(document.getElementById('demoChart'), {
-      type: 'doughnut',
-      data: {
-        labels: ['Correct', 'Wrong'],
-        datasets: [{
-          data: [{{ demo_results.correct }}, {{ demo_results.wrong }}],
-          backgroundColor: ['#22c55e', '#ef4444']
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: { position: 'bottom' },
-          title: { display: true, text: 'Demo Results' }
-        }
-      }
-    });
-  </script>
-  {% endif %} {% endif %}
+  <!-- Confusion Matrix -->
+  <div
+    style="
+      background: #f8fafc;
+      padding: 25px;
+      border-radius: 12px;
+      margin-bottom: 30px;
+    "
+  >
+    <h3 style="margin-bottom: 20px; text-align: center">Confusion Matrix</h3>
+    <div style="overflow-x: auto">
+      <table style="margin: 0 auto; border-collapse: collapse; font-size: 12px">
+        <thead>
+          <tr>
+            <th
+              style="
+                padding: 8px;
+                border: 1px solid #e2e8f0;
+                background: #f8fafc;
+              "
+            ></th>
+            {% for cls in demo_results.classes %}
+            <th
+              style="
+                padding: 8px;
+                border: 1px solid #e2e8f0;
+                background: #f8fafc;
+                writing-mode: vertical-rl;
+                transform: rotate(180deg);
+              "
+            >
+              {{ cls[:10] }}
+            </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for i, true_cls in enumerate(demo_results.classes) %}
+          <tr>
+            <th
+              style="
+                padding: 8px;
+                border: 1px solid #e2e8f0;
+                background: #f8fafc;
+                text-align: left;
+              "
+            >
+              {{ true_cls[:10] }}
+            </th>
+            {% for j, pred_cls in enumerate(demo_results.classes) %} {% set
+            count = demo_results.confusion_matrix[i][j] %} {% set is_diagonal =
+            (i == j) %}
+            <td
+              style="padding: 8px; border: 1px solid #e2e8f0; text-align: center; 
+                      background: {% if count > 0 %}{% if is_diagonal %}#dcfce7{% else %}#fee2e2{% endif %}{% else %}white{% endif%};
+                      font-weight: {% if count > 0 %}600{% else %}normal{% endif %};"
+            >
+              {{ count if count > 0 else '' }}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div
+      style="
+        margin-top: 15px;
+        text-align: center;
+        font-size: 12px;
+        color: #64748b;
+      "
+    >
+      <span style="display: inline-block; margin: 0 10px"
+        ><span
+          style="
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            background: #dcfce7;
+            border: 1px solid #059669;
+            vertical-align: middle;
+          "
+        ></span>
+        Correct</span
+      >
+      <span style="display: inline-block; margin: 0 10px"
+        ><span
+          style="
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            background: #fee2e2;
+            border: 1px solid #dc2626;
+            vertical-align: middle;
+          "
+        ></span>
+        Incorrect</span
+      >
+    </div>
+  </div>
+
+  <!-- Results Summary -->
+  <div
+    style="
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      margin-bottom: 30px;
+    "
+  >
+    <div
+      style="
+        background: #dcfce7;
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+      "
+    >
+      <div style="font-size: 1.8em; font-weight: 700; color: #16a34a">
+        {{ demo_results.correct }}
+      </div>
+      <small>Correct</small>
+    </div>
+    <div
+      style="
+        background: #fee2e2;
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+      "
+    >
+      <div style="font-size: 1.8em; font-weight: 700; color: #dc2626">
+        {{ demo_results.wrong }}
+      </div>
+      <small>Wrong</small>
+    </div>
+    <div
+      style="
+        background: #dbeafe;
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+      "
+    >
+      <div style="font-size: 1.8em; font-weight: 700; color: #2563eb">
+        {{ demo_results.total }}
+      </div>
+      <small>Total</small>
+    </div>
+  </div>
+
+  <!-- Sample Results Table -->
+  <div style="background: #f8fafc; padding: 20px; border-radius: 12px">
+    <h3 style="margin-bottom: 15px">
+      Chi tiết nhận dạng ({{ demo_results.samples|length }} mẫu)
+    </h3>
+    <div style="max-height: 400px; overflow-y: auto">
+      <table style="width: 100%; border-collapse: collapse; font-size: 0.9em">
+        <thead style="position: sticky; top: 0; background: white">
+          <tr style="background: #f3f4f6">
+            <th style="padding: 10px; text-align: left">Image</th>
+            <th style="padding: 10px; text-align: left">True</th>
+            <th style="padding: 10px; text-align: left">Predicted</th>
+            <th style="padding: 10px; text-align: center">Confidence</th>
+            <th style="padding: 10px; text-align: center">✓</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in demo_results.samples %}
+          <tr
+            style="border-bottom:1px solid #eee; background:{% if s.correct %}#f0fdf4{% else %}#fef2f2{% endif %}"
+          >
+            <td style="padding: 8px">{{ s.image[:25] }}...</td>
+            <td style="padding: 8px">{{ s.true_label }}</td>
+            <td style="padding: 8px">{{ s.predicted }}</td>
+            <td style="padding: 8px; text-align: center">
+              {{ "%.2f"|format(s.confidence) }}
+            </td>
+            <td style="padding: 8px; text-align: center">
+              {% if s.correct %}<span style="color: #16a34a; font-size: 1.2em"
+                >✓</span
+              >
+              {% else %}<span style="color: #dc2626; font-size: 1.2em">✗</span
+              >{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %} {% endif %} {% endif %}
 </div>
 
 {% endblock %}

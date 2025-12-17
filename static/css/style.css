@@ -216,14 +216,9 @@ main {
   border: 3px solid var(--primary);
   overflow: hidden;
   box-shadow: 0 8px 24px rgba(37, 99, 235, 0.15);
-  transition: all 0.3s ease;
   flex-shrink: 0;
 }
 
-.preview-box-large:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 32px rgba(37, 99, 235, 0.2);
-}
 
 /* ===== UPLOAD (legacy) ===== */
 .upload-row {

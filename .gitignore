@@ -95,8 +95,10 @@ TODO.md
 NOTES.md
 
 
+
 #Tạm ignore file data, sau train xong mình thêm lại hen
 *.md
 data/
 static/gradcam/
 static/uploads/
+static/detection_bbox/

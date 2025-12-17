@@ -1,7 +1,7 @@
 {% extends "base.html" %} {% block content %}
 
 <div class="card">
-  <h2>Nhận dạng khuôn mặt</h2>
+  <h2>Nhận dạng</h2>
   <p class="subtitle">
     Upload ảnh để so sánh kết quả của 3 models + Grad-CAM visualization
   </p>
@@ -70,7 +70,11 @@
     {% else %}
     <div style="margin-bottom: 20px">
       <div style="display: flex; gap: 24px; align-items: flex-start">
-        <div class="preview-box-large">
+        <div
+          class="preview-box-large"
+          onclick="document.getElementById('imageInputChange').click()"
+          style="cursor: pointer"
+        >
           <img
             id="previewImg"
             src="{{ url_for('static', filename='uploads/' + image_name) }}"
@@ -93,55 +97,43 @@
           >
             {{ image_name }}
           </div>
+          <input
+            type="file"
+            name="image"
+            accept="image/*"
+            id="imageInputChange"
+            style="display: none"
+            onchange="handleImageChange(this)"
+          />
           <div style="display: flex; gap: 12px; flex-wrap: wrap">
-            <label
-              for="imageInputChange"
-              class="btn-secondary"
-              style="cursor: pointer; display: inline-block; text-align: center"
-            >
-              Đổi ảnh khác
-            </label>
-            <input
-              type="file"
-              name="image"
-              accept="image/*"
-              id="imageInputChange"
-              style="display: none"
-              onchange="handleImageChange(this)"
-            />
-            <a href="?action=clear" class="btn-outline">Xóa & Bắt đầu lại</a>
+            <button class="btn" type="submit" id="submitBtn">
+              <svg
+                style="
+                  width: 18px;
+                  height: 18px;
+                  margin-right: 8px;
+                  display: inline-block;
+                  vertical-align: middle;
+                "
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                ></path>
+              </svg>
+              Nhận dạng khuôn mặt
+            </button>
           </div>
         </div>
       </div>
     </div>
     {% endif %}
 
-    <div id="buttonContainer" style="margin-top: 20px">
-      {% if image_name %}
-      <button class="btn" type="submit" id="submitBtn" style="width: 100%">
-        <svg
-          style="
-            width: 18px;
-            height: 18px;
-            margin-right: 8px;
-            display: inline-block;
-            vertical-align: middle;
-          "
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-          ></path>
-        </svg>
-        Nhận dạng khuôn mặt
-      </button>
-      {% endif %}
-    </div>
     <div id="loadingIndicator" style="display: none; margin-top: 20px">
       <div class="loading-spinner" style="margin: 0 auto"></div>
       <p
@@ -209,7 +201,10 @@
       }
 
       document.getElementById('loadingIndicator').style.display = 'block';
-      document.getElementById('buttonContainer').style.display = 'none';
+      const submitBtn = document.getElementById('submitBtn');
+      if (submitBtn) {
+        submitBtn.style.display = 'none';
+      }
     });
   </script>
 
@@ -782,6 +777,32 @@
           </span>
         </div>
       </div>
+    </div>
+    {% endif %}
+
+    <!-- Hiển thị ảnh với bounding box -->
+    {% if face_info.bbox_image and face_info.num_faces > 0 %}
+    <div style="margin-top: 20px; text-align: center">
+      <div
+        style="
+          font-size: 12px;
+          font-weight: 600;
+          color: #64748b;
+          margin-bottom: 12px;
+        "
+      >
+        Ảnh gốc với vùng khuôn mặt được phát hiện
+      </div>
+      <img
+        src="{{ url_for('static', filename=face_info.bbox_image) }}"
+        style="
+          max-width: 100%;
+          height: auto;
+          border-radius: 12px;
+          border: 2px solid #10b981;
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+        "
+      />
     </div>
     {% endif %}
   </div>
