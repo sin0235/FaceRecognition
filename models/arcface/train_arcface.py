@@ -629,7 +629,18 @@ class ArcFaceTrainer:
             
             # Statistics
             running_loss += loss.item()
-            _, predicted = outputs.max(1)
+            
+            # Tinh accuracy dua tren pure cosine similarity (khong bi anh huong boi margin)
+            # ArcFace output da bi modify boi margin, nen can tinh lai tu embeddings
+            with torch.no_grad():
+                # Lay ArcFace weights va normalize
+                arcface_weight = self.model.arcface.weight
+                normed_embeddings = torch.nn.functional.normalize(embeddings.float(), p=2, dim=1)
+                normed_weight = torch.nn.functional.normalize(arcface_weight, p=2, dim=1)
+                # Tinh pure cosine similarity
+                pure_cosine = torch.mm(normed_embeddings, normed_weight.t())
+                _, predicted = pure_cosine.max(1)
+            
             total += labels.size(0)
             correct += predicted.eq(labels).sum().item()
             
@@ -677,7 +688,14 @@ class ArcFaceTrainer:
                     loss = self.criterion(outputs, labels)
                 
                 running_loss += loss.item()
-                _, predicted = outputs.max(1)
+                
+                # Tinh accuracy dua tren pure cosine similarity
+                arcface_weight = self.model.arcface.weight
+                normed_embeddings = torch.nn.functional.normalize(embeddings.float(), p=2, dim=1)
+                normed_weight = torch.nn.functional.normalize(arcface_weight, p=2, dim=1)
+                pure_cosine = torch.mm(normed_embeddings, normed_weight.t())
+                _, predicted = pure_cosine.max(1)
+                
                 total += labels.size(0)
                 correct += predicted.eq(labels).sum().item()
                 

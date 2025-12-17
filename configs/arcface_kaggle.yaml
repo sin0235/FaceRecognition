@@ -11,8 +11,8 @@ model:
 
 # ArcFace Loss - DIEU CHINH CHO DATASET NHO
 arcface:
-  margin: 0.1 # Giam xuong 0.2 de de hoi tu voi it data/class
-  scale: 48.0 # Giam xuong 30 de on dinh hon (paper dung 64 voi 5.8M images)
+  margin: 0.3 # Giam xuong 0.2 de de hoi tu voi it data/class
+  scale: 64.0 # Giam xuong 30 de on dinh hon (paper dung 64 voi 5.8M images)
   easy_margin: true # Giu easy_margin de de hoi tu
 
 # Training Configuration - toi uu cho dataset nho

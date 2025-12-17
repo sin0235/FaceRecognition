@@ -350,7 +350,8 @@ def extract_embeddings_batch(
     model: nn.Module,
     transform,
     device: str = 'cpu',
-    batch_size: int = 64
+    batch_size: int = 64,
+    model_type: str = 'arcface'
 ) -> Tuple[np.ndarray, List[str]]:
     """
     Trich xuat embeddings cho nhieu anh (batch processing)
@@ -382,7 +383,10 @@ def extract_embeddings_batch(
         batch_tensor = torch.stack(batch_images).to(device)
         
         with torch.no_grad():
-            batch_embeddings = model(batch_tensor, labels=None)
+            if model_type == 'facenet':
+                batch_embeddings = model(batch_tensor)
+            else:
+                batch_embeddings = model(batch_tensor, labels=None)
             batch_embeddings = F.normalize(batch_embeddings, p=2, dim=1)
             batch_embeddings = batch_embeddings.cpu().numpy()
         
