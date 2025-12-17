@@ -204,13 +204,24 @@ def get_lbph_model():
     global lbph_model, lbph_label_map
     if lbph_model is None:
         try:
-            lbph_path = os.path.join(ROOT_DIR, "models/checkpoints/LBHP/lbph_model.yml")
+            lbph_path = os.path.join(ROOT_DIR, "models/checkpoints/LBHP/lbph_full_celeba.xml")
             if os.path.exists(lbph_path):
                 lbph_model = cv2.face.LBPHFaceRecognizer_create()
                 lbph_model.read(lbph_path)
+                
                 label_map_path = os.path.join(ROOT_DIR, "models/checkpoints/LBHP/label_map.npy")
                 if os.path.exists(label_map_path):
                     lbph_label_map = np.load(label_map_path, allow_pickle=True).item()
+                else:
+                    metadata_path = os.path.join(ROOT_DIR, "data/metadata/train_labels.csv")
+                    if os.path.exists(metadata_path):
+                        import pandas as pd
+                        df = pd.read_csv(metadata_path)
+                        mapping_df = df[['label', 'identity_id']].drop_duplicates()
+                        lbph_label_map = dict(zip(mapping_df['label'], mapping_df['identity_id']))
+                        np.save(label_map_path, lbph_label_map)
+                        print(f"Created label_map with {len(lbph_label_map)} identities")
+                
                 print("LBPH model loaded")
         except Exception as e:
             print(f"LBPH error: {e}")

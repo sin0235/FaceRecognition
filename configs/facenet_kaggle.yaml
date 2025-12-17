@@ -12,7 +12,7 @@ model:
 training:
   num_epochs: 30
   batch_size: 32 # FaceNet cần 3 images/triplet nên batch nhỏ hơn
-  num_workers: 8
+  num_workers: 4
 
   learning_rate: 0.0003 # Adam LR
   optimizer: "adam"
