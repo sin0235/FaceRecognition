@@ -219,8 +219,12 @@ def train_one_epoch_random(model, loader, criterion, optimizer, device, epoch, g
     }
 
 
-def validate_online(model, loader, criterion, device, epoch, margin=0.2):
-    """Validate với online mining."""
+def validate_online(model, loader, criterion, device, epoch, margin=0.2, mining='semi_hard'):
+    """Validate với online mining.
+    
+    Args:
+        mining: 'semi_hard' hoặc 'hard' - phải giống với training strategy
+    """
     model.eval()
     total_loss = 0.0
     total_acc = 0.0
@@ -238,7 +242,11 @@ def validate_online(model, loader, criterion, device, epoch, margin=0.2):
             
             embeddings = model(images)
             
-            a_idx, p_idx, n_idx = mine_semi_hard_triplets(embeddings, labels, margin)
+            # Dùng cùng mining strategy với training
+            if mining == 'semi_hard':
+                a_idx, p_idx, n_idx = mine_semi_hard_triplets(embeddings, labels, margin)
+            else:  # 'hard'
+                a_idx, p_idx, n_idx = mine_batch_hard_triplets(embeddings, labels)
             
             if len(a_idx) == 0:
                 continue
