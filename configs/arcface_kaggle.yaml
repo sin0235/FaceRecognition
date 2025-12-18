@@ -23,7 +23,7 @@ training:
 
   warmup:
     enabled: true
-    epochs: 10 # Tang len 10 epochs de on dinh hon
+    epochs: 5 # Tang len 10 epochs de on dinh hon
     start_lr: 0.0001 # Bat dau cao hon de warmup smooth
 
   optimizer:
