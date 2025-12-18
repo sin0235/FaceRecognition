@@ -284,6 +284,61 @@ def mine_batch_hard_triplets(embeddings, labels):
     return anchor_indices, positive_indices, negative_indices
 
 
+def check_identity_overlap(train_dir, val_dir):
+    """
+    Kiểm tra xem train và val có identities trùng nhau không.
+    
+    Args:
+        train_dir: Thư mục train data
+        val_dir: Thư mục val data
+        
+    Raises:
+        ValueError: Nếu phát hiện identity overlap
+    """
+    # Lấy danh sách identities từ train
+    train_identities = set()
+    for item in os.listdir(train_dir):
+        item_path = os.path.join(train_dir, item)
+        if os.path.isdir(item_path):
+            train_identities.add(item)
+    
+    # Lấy danh sách identities từ val
+    val_identities = set()
+    for item in os.listdir(val_dir):
+        item_path = os.path.join(val_dir, item)
+        if os.path.isdir(item_path):
+            val_identities.add(item)
+    
+    # Kiểm tra overlap
+    overlap = train_identities.intersection(val_identities)
+    
+    print(f"\n{'='*60}")
+    print("IDENTITY SPLIT VALIDATION")
+    print(f"{'='*60}")
+    print(f"Train identities: {len(train_identities)}")
+    print(f"Val identities: {len(val_identities)}")
+    print(f"Overlap identities: {len(overlap)}")
+    
+    if overlap:
+        print(f"\n{'!'*60}")
+        print("ERROR: DATA LEAKAGE DETECTED")
+        print(f"{'!'*60}")
+        print(f"Found {len(overlap)} identities in both train and val sets!")
+        print(f"Sample overlapping identities: {list(overlap)[:10]}")
+        print("\nThis indicates that train and val are NOT split by identity (by_id).")
+        print("This will lead to inflated validation accuracy and poor generalization.")
+        print(f"{'!'*60}\n")
+        raise ValueError(
+            f"Data leakage detected: {len(overlap)} identities appear in both "
+            f"train and val sets. Please re-split your dataset using 'by_id' strategy."
+        )
+    else:
+        print("✓ No identity overlap detected (split_strategy: by_id)")
+        print(f"{'='*60}\n")
+    
+    return True
+
+
 def create_online_dataloaders(train_dir, val_dir, batch_size=32, 
                               image_size=160, num_workers=4,
                               images_per_identity=4):
@@ -301,6 +356,9 @@ def create_online_dataloaders(train_dir, val_dir, batch_size=32,
     Returns:
         train_loader, val_loader
     """
+    # Validate no identity overlap between train and val
+    check_identity_overlap(train_dir, val_dir)
+    
     train_dataset = OnlineTripletDataset(
         root_dir=train_dir,
         image_size=image_size,

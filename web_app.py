@@ -174,13 +174,24 @@ def get_facenet_engine():
             model_path = os.path.join(ROOT_DIR, "models/checkpoints/facenet/facenet_best.pth")
             db_path = os.path.join(ROOT_DIR, "data/facenet_embeddings_db.npy")
             
-            model = FaceNetModel(embedding_size=512, pretrained='casia-webface', device=device)
+            model = FaceNetModel(embedding_size=512, pretrained='vggface2', device=device)
             if os.path.exists(model_path):
                 checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+                
+                # Load state dict, bo qua logits layer
                 if 'model_state_dict' in checkpoint:
-                    model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+                    state_dict = checkpoint['model_state_dict']
                 elif 'state_dict' in checkpoint:
-                    model.load_state_dict(checkpoint['state_dict'], strict=False)
+                    state_dict = checkpoint['state_dict']
+                else:
+                    state_dict = {}
+                
+                # Filter out logits weights
+                filtered_state_dict = {k: v for k, v in state_dict.items() 
+                                      if 'logits' not in k}
+                
+                model.load_state_dict(filtered_state_dict, strict=False)
+                print(f"Loaded {len(filtered_state_dict)} weights, skipped {len(state_dict) - len(filtered_state_dict)} logits weights")
             model.eval()
             
             transform = transforms.Compose([

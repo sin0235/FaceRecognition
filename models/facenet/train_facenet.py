@@ -376,11 +376,16 @@ def main():
     batch_size = train_cfg['batch_size']
     margin = model_cfg.get('margin', 0.2)
     images_per_identity = train_cfg.get('images_per_identity', 4)
+    split_strategy = data_cfg.get('split_strategy', 'unknown')
 
     print(f"\n=== Dataset ===")
     print(f"Train: {train_dir}")
     print(f"Val: {val_dir}")
     print(f"Image size: {image_size}x{image_size}")
+    print(f"Split strategy: {split_strategy}")
+    if split_strategy != 'by_id':
+        print("WARNING: split_strategy not set to 'by_id' in config!")
+        print("Data leakage validation will still run to ensure proper split.")
     
     # Tạo DataLoader dựa trên mining strategy
     if args.mining in ['semi_hard', 'hard']:

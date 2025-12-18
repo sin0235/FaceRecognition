@@ -17,6 +17,9 @@ training:
 
 dataset:
   image_size: 160
+  split_strategy: by_id # Phân tách theo identity, không theo image
+  min_images_per_identity: 2
+  images_per_identity: 4 # Số ảnh mỗi identity trong online mining
 
   train_csv: "data/CelebA_Aligned_Balanced/metadata/train_labels.csv"
   val_csv: "data/CelebA_Aligned_Balanced/metadata/val_labels.csv"
