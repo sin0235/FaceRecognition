@@ -10,7 +10,7 @@ model:
 
 # Training Configuration
 training:
-  num_epochs: 150
+  num_epochs: 100
   batch_size: 32 # FaceNet cần 3 images/triplet nên batch nhỏ hơn
   num_workers: 4
 
@@ -19,11 +19,11 @@ training:
   weight_decay: 0.0001
 
   # Scheduler
-  scheduler_step: 10
-  scheduler_gamma: 0.1
+  scheduler_step: 20
+  scheduler_gamma: 0.5
 
   # Early stopping
-  patience: 12
+  patience: 20
   warmup_epochs: 3
 
   # Gradient clipping
