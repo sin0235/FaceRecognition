@@ -174,7 +174,7 @@ def get_facenet_engine():
             model_path = os.path.join(ROOT_DIR, "models/checkpoints/facenet/facenet_best.pth")
             db_path = os.path.join(ROOT_DIR, "data/facenet_embeddings_db.npy")
             
-            model = FaceNetModel(embedding_size=512, pretrained='vggface2', device=device)
+            model = FaceNetModel(embedding_size=512, pretrained='casia-webface', device=device)
             if os.path.exists(model_path):
                 checkpoint = torch.load(model_path, map_location=device, weights_only=False)
                 if 'model_state_dict' in checkpoint:
