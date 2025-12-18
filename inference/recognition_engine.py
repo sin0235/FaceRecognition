@@ -39,16 +39,27 @@ ARCFACE_TEMPLATE = np.array([
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-    """Tinh cosine similarity giua 2 vectors"""
+    """
+    Tinh cosine similarity giua 2 vectors.
+    
+    NOTE: Embeddings tu extract_embedding_single da duoc L2 normalize,
+    nen with normalized vectors: cos_sim = dot(a, b)
+    """
     a = a.astype(np.float32).flatten()
     b = b.astype(np.float32).flatten()
     
+    # Check if vectors are normalized (optimization for pre-normalized embeddings)
     norm_a = np.linalg.norm(a)
     norm_b = np.linalg.norm(b)
     
     if norm_a == 0 or norm_b == 0:
         return 0.0
     
+    # If both vectors are approximately L2-normalized (norm ≈ 1), use dot product
+    if abs(norm_a - 1.0) < 1e-3 and abs(norm_b - 1.0) < 1e-3:
+        return float(np.dot(a, b))
+    
+    # Otherwise, compute full cosine similarity
     return float(np.dot(a, b) / (norm_a * norm_b))
 
 
@@ -459,7 +470,7 @@ if __name__ == "__main__":
     print("="*60)
     
     # Test voi dummy database
-    db_path = "data/embeddings_db.npy"
+    db_path = "data/arcface_embeddings_db.npy"
     model_path = "models/checkpoints/arcface/arcface_best.pth"
     
     if os.path.exists(db_path) and os.path.exists(model_path):

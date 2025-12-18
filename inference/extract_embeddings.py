@@ -721,7 +721,7 @@ def extract_embedding_for_folder(
 def build_db(
     model_path: str,
     root_folder: str = "data/celeb",
-    save_path: str = "data/embeddings_db.npy",
+    save_path: str = "data/arcface_embeddings_db.npy",
     device: str = None,
     use_face_detection: bool = True,
     model_type: str = "arcface"
@@ -732,7 +732,7 @@ def build_db(
     Args:
         model_path: Duong dan checkpoint
         root_folder: Thu muc chua cac folder celebrity
-        save_path: Duong dan luu embeddings_db.npy
+        save_path: Duong dan luu arcface_embeddings_db.npy
         device: 'cuda' hoac 'cpu'
         use_face_detection: Su dung face detection + alignment truoc khi extract
         model_type: 'arcface' hoac 'facenet'
@@ -856,7 +856,7 @@ if __name__ == "__main__":
     parser.add_argument('--data-dir', type=str, default='data/celeb',
                        help='Folder chua anh celebrities (for db mode)')
     parser.add_argument('--output-dir', type=str, default='data/embeddings')
-    parser.add_argument('--output-path', type=str, default='data/embeddings_db.npy',
+    parser.add_argument('--output-path', type=str, default='data/arcface_embeddings_db.npy',
                        help='Output path for db mode')
     parser.add_argument('--device', type=str, default=None)
     parser.add_argument('--batch-size', type=int, default=64)

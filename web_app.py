@@ -128,7 +128,7 @@ def get_arcface_engine():
         try:
             from inference.recognition_engine import RecognitionEngine
             model_path = os.path.join(ROOT_DIR, "models/checkpoints/arcface/arcface_best.pth")
-            db_path = os.path.join(ROOT_DIR, "data/embeddings_db.npy")
+            db_path = os.path.join(ROOT_DIR, "data/arcface_embeddings_db.npy")
             
             if os.path.exists(model_path):
                 arcface_engine = RecognitionEngine(
@@ -148,7 +148,7 @@ def get_realtime_arcface_engine():
         try:
             from inference.recognition_engine import RecognitionEngine
             model_path = os.path.join(ROOT_DIR, "models/checkpoints/arcface/arcface_best.pth")
-            db_path = os.path.join(ROOT_DIR, "data/embeddings_db.npy")
+            db_path = os.path.join(ROOT_DIR, "data/arcface_embeddings_db.npy")
             
             if os.path.exists(model_path):
                 realtime_arcface_engine = RecognitionEngine(
@@ -635,7 +635,13 @@ def home():
                 
                 def fmt(res):
                     if res.get("status") == "success":
-                        return {"text": f"{res['identity']} ({res['confidence']:.2f})", "ok": True, "detail": res}
+                        # Convert confidence to percentage (0-1 → 0-100%)
+                        confidence_pct = res['confidence'] * 100
+                        return {
+                            "text": f"{res['identity']} ({confidence_pct:.2f}%)", 
+                            "ok": True, 
+                            "detail": res
+                        }
                     return {"text": "Error", "ok": False, "detail": res}
                 
                 result = {

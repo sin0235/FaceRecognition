@@ -17,6 +17,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch import optim
 from tqdm import tqdm
+import numpy as np
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT_DIR)
@@ -58,6 +59,105 @@ def get_gpu_memory_mb():
     if torch.cuda.is_available():
         return torch.cuda.memory_allocated() / 1024 / 1024
     return 0
+
+
+def compute_verification_accuracy(embeddings, labels, num_pairs=10000, threshold=0.5):
+    """
+    Tính verification accuracy dựa trên embedding similarity.
+    Phù hợp khi chia dataset theo identity (by_id) - val identities khác train.
+    
+    Args:
+        embeddings: numpy array (N, dim) - embeddings đã L2 normalize
+        labels: numpy array (N,) - identity labels
+        num_pairs: số cặp ảnh để test
+        threshold: ngưỡng cosine similarity để phân loại same/different
+        
+    Returns:
+        accuracy: tỷ lệ phân loại đúng
+        best_threshold: ngưỡng tối ưu
+        metrics: dict chứa chi tiết
+    """
+    def cosine_sim(a, b):
+        """Tính cosine similarity giữa 2 vectors bằng numpy"""
+        a_norm = a / (np.linalg.norm(a) + 1e-8)
+        b_norm = b / (np.linalg.norm(b) + 1e-8)
+        return np.dot(a_norm, b_norm)
+    
+    n = len(embeddings)
+    if n < 2:
+        return 0.0, threshold, {}
+    
+    # Tạo positive pairs (cùng identity) và negative pairs (khác identity)
+    unique_labels = np.unique(labels)
+    
+    # Group indices by label
+    label_to_indices = {label: np.where(labels == label)[0] for label in unique_labels}
+    
+    # Chỉ giữ labels có >= 2 samples
+    valid_labels = [l for l in unique_labels if len(label_to_indices[l]) >= 2]
+    
+    if len(valid_labels) < 2:
+        return 0.0, threshold, {'error': 'Not enough valid labels'}
+    
+    # Sample positive pairs
+    pos_pairs = []
+    for _ in range(num_pairs // 2):
+        label = np.random.choice(valid_labels)
+        indices = label_to_indices[label]
+        if len(indices) >= 2:
+            i, j = np.random.choice(indices, 2, replace=False)
+            pos_pairs.append((i, j, 1))  # 1 = same person
+    
+    # Sample negative pairs
+    neg_pairs = []
+    for _ in range(num_pairs // 2):
+        l1, l2 = np.random.choice(valid_labels, 2, replace=False)
+        i = np.random.choice(label_to_indices[l1])
+        j = np.random.choice(label_to_indices[l2])
+        neg_pairs.append((i, j, 0))  # 0 = different person
+    
+    all_pairs = pos_pairs + neg_pairs
+    np.random.shuffle(all_pairs)
+    
+    # Tính similarities bằng numpy
+    similarities = []
+    true_labels = []
+    for i, j, label in all_pairs:
+        sim = cosine_sim(embeddings[i], embeddings[j])
+        similarities.append(sim)
+        true_labels.append(label)
+    
+    similarities = np.array(similarities)
+    true_labels = np.array(true_labels)
+    
+    # Tìm threshold tối ưu
+    best_acc = 0
+    best_thresh = threshold
+    for thresh in np.arange(0.1, 0.9, 0.05):
+        predictions = (similarities > thresh).astype(int)
+        acc = (predictions == true_labels).mean()
+        if acc > best_acc:
+            best_acc = acc
+            best_thresh = thresh
+    
+    # Tính accuracy với threshold tối ưu
+    predictions = (similarities > best_thresh).astype(int)
+    accuracy = (predictions == true_labels).mean()
+    
+    # Chi tiết metrics
+    pos_similarities = similarities[true_labels == 1]
+    neg_similarities = similarities[true_labels == 0]
+    
+    metrics = {
+        'accuracy': accuracy,
+        'threshold': best_thresh,
+        'pos_sim_mean': pos_similarities.mean() if len(pos_similarities) > 0 else 0,
+        'neg_sim_mean': neg_similarities.mean() if len(neg_similarities) > 0 else 0,
+        'num_pos_pairs': len(pos_pairs),
+        'num_neg_pairs': len(neg_pairs)
+    }
+    
+    return accuracy, best_thresh, metrics
 
 
 def train_one_epoch_online(model, loader, criterion, optimizer, device, epoch, 
@@ -220,7 +320,7 @@ def train_one_epoch_random(model, loader, criterion, optimizer, device, epoch, g
 
 
 def validate_online(model, loader, criterion, device, epoch, margin=0.2, mining='semi_hard'):
-    """Validate với online mining.
+    """Validate với online mining + verification accuracy.
     
     Args:
         mining: 'semi_hard' hoặc 'hard' - phải giống với training strategy
@@ -232,6 +332,10 @@ def validate_online(model, loader, criterion, device, epoch, margin=0.2, mining=
     total_neg_dist = 0.0
     total_triplets = 0
     num_batches = 0
+    
+    # Collect embeddings cho verification accuracy
+    all_embeddings = []
+    all_labels = []
 
     with torch.no_grad():
         pbar = tqdm(loader, desc=f"Epoch {epoch} [Val]")
@@ -241,6 +345,10 @@ def validate_online(model, loader, criterion, device, epoch, margin=0.2, mining=
             labels = batch_labels.unsqueeze(1).expand(B, K).reshape(-1).to(device)
             
             embeddings = model(images)
+            
+            # Collect cho verification
+            all_embeddings.append(embeddings.cpu().numpy())
+            all_labels.append(labels.cpu().numpy())
             
             # Dùng cùng mining strategy với training
             if mining == 'semi_hard':
@@ -267,15 +375,29 @@ def validate_online(model, loader, criterion, device, epoch, margin=0.2, mining=
             
             pbar.set_postfix({
                 'val_loss': f'{loss.item():.4f}',
-                'val_acc': f'{metrics["accuracy"]:.4f}'
+                'triplet_acc': f'{metrics["accuracy"]:.4f}'
             })
 
     if num_batches == 0:
-        return {'loss': 0, 'accuracy': 0, 'pos_dist': 0, 'neg_dist': 0, 'triplets': 0}
+        return {
+            'loss': 0, 'triplet_acc': 0, 'pos_dist': 0, 'neg_dist': 0, 'triplets': 0,
+            'ver_acc': 0, 'ver_threshold': 0.5
+        }
+    
+    # Tính verification accuracy
+    all_embeddings = np.concatenate(all_embeddings, axis=0)
+    all_labels = np.concatenate(all_labels, axis=0)
+    
+    ver_acc, ver_threshold, ver_metrics = compute_verification_accuracy(
+        all_embeddings, all_labels, 
+        num_pairs=min(10000, len(all_embeddings) * 2)
+    )
     
     return {
         'loss': total_loss / num_batches,
-        'accuracy': total_acc / num_batches,
+        'triplet_acc': total_acc / num_batches,  # Triplet accuracy (fast, cho progress)
+        'ver_acc': ver_acc,  # Verification accuracy (realistic, cho evaluation)
+        'ver_threshold': ver_threshold,
         'pos_dist': total_pos_dist / num_batches,
         'neg_dist': total_neg_dist / num_batches,
         'triplets': total_triplets
@@ -472,9 +594,11 @@ def main():
 
     history = {
         'train_loss': [],
-        'train_acc': [],
+        'train_acc': [],  # Triplet accuracy
         'val_loss': [],
-        'val_acc': [],
+        'val_triplet_acc': [],  # Triplet accuracy (fast)
+        'val_ver_acc': [],  # Verification accuracy (realistic)
+        'val_ver_threshold': [],
         'train_pos_dist': [],
         'train_neg_dist': [],
         'val_pos_dist': [],
@@ -489,6 +613,14 @@ def main():
     print(f"Batch size: {batch_size}")
     print(f"Patience: {patience}")
     print(f"Mining: {args.mining}")
+    
+    print(f"\n{'='*60}")
+    print("METRICS EXPLANATION")
+    print(f"{'='*60}")
+    print("Triplet Accuracy: Phần trăm triplets thỏa d(a,p) < d(a,n)")
+    print("                  → Cao (~90-95%) là BÌNH THƯỜNG, chỉ đo constraint")
+    print("Verification Acc: Accuracy thực tế trên pair matching task")
+    print("                  → Đây là metric QUAN TRỌNG để đánh giá model")
     print("=" * 60)
 
     training_start = time.time()
@@ -524,7 +656,9 @@ def main():
         history['train_loss'].append(float(train_metrics['loss']))
         history['train_acc'].append(float(train_metrics['accuracy']))
         history['val_loss'].append(float(val_metrics['loss']))
-        history['val_acc'].append(float(val_metrics['accuracy']))
+        history['val_triplet_acc'].append(float(val_metrics.get('triplet_acc', val_metrics.get('accuracy', 0))))
+        history['val_ver_acc'].append(float(val_metrics.get('ver_acc', 0)))
+        history['val_ver_threshold'].append(float(val_metrics.get('ver_threshold', 0.5)))
         history['train_pos_dist'].append(float(train_metrics['pos_dist']))
         history['train_neg_dist'].append(float(train_metrics['neg_dist']))
         history['val_pos_dist'].append(float(val_metrics['pos_dist']))
@@ -536,13 +670,33 @@ def main():
         print(f"\n{'='*60}")
         print(f"Epoch {epoch}/{num_epochs} | Time: {epoch_total_time:.1f}s | GPU: {gpu_mem:.0f}MB")
         print(f"-" * 60)
-        print(f"  Train | Loss: {train_metrics['loss']:.4f} | Acc: {train_metrics['accuracy']:.4f}")
+        print(f"  Train | Loss: {train_metrics['loss']:.4f} | Triplet Acc: {train_metrics['accuracy']:.4f}")
         print(f"        | Pos Dist: {train_metrics['pos_dist']:.4f} | Neg Dist: {train_metrics['neg_dist']:.4f}")
         if 'triplets' in train_metrics:
             print(f"        | Triplets mined: {train_metrics['triplets']}")
-        print(f"  Val   | Loss: {val_metrics['loss']:.4f} | Acc: {val_metrics['accuracy']:.4f}")
+        
+        # Log validation metrics
+        triplet_acc = val_metrics.get('triplet_acc', val_metrics.get('accuracy', 0))
+        ver_acc = val_metrics.get('ver_acc', 0)
+        ver_threshold = val_metrics.get('ver_threshold', 0.5)
+        
+        print(f"  Val   | Loss: {val_metrics['loss']:.4f}")
+        print(f"        | Triplet Acc: {triplet_acc:.4f} (constraint: d(a,p) < d(a,n))")
+        if ver_acc > 0:
+            print(f"        | Verification Acc: {ver_acc:.4f} @ threshold={ver_threshold:.2f} (realistic metric)")
         print(f"        | Pos Dist: {val_metrics['pos_dist']:.4f} | Neg Dist: {val_metrics['neg_dist']:.4f}")
         print(f"  LR: {current_lr:.6f}")
+        
+        # Warning nếu triplet acc quá cao ngay từ đầu
+        if epoch <= 3 and triplet_acc > 0.95:
+            print(f"\n  [INFO] Triplet Acc cao ({triplet_acc:.2%}) là BÌNH THƯỜNG ở epoch đầu.")
+            print(f"         Metric này chỉ check constraint d(a,p) < d(a,n).")
+            print(f"         Hãy theo dõi Verification Acc để đánh giá thực sự!")
+        
+        # Cảnh báo nếu verification acc cũng quá cao ngay từ đầu
+        if epoch <= 3 and ver_acc > 0.95:
+            print(f"\n  [WARNING] Verification Acc cao bất thường ({ver_acc:.2%}) ở epoch {epoch}!")
+            print(f"            Có thể do dataset quá dễ hoặc có vấn đề với data split.")
 
         # Save best model (dựa trên val_loss thay vì accuracy)
         if val_metrics['loss'] < best_val_loss:
@@ -554,7 +708,9 @@ def main():
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'val_acc': val_metrics['accuracy'],
+                'val_triplet_acc': val_metrics.get('triplet_acc', val_metrics.get('accuracy', 0)),
+                'val_ver_acc': val_metrics.get('ver_acc', 0),
+                'val_ver_threshold': val_metrics.get('ver_threshold', 0.5),
                 'val_loss': val_metrics['loss'],
                 'config': config,
                 'mining': args.mining
@@ -598,7 +754,9 @@ def main():
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
-        'val_acc': val_metrics['accuracy'],
+        'val_triplet_acc': val_metrics.get('triplet_acc', val_metrics.get('accuracy', 0)),
+        'val_ver_acc': val_metrics.get('ver_acc', 0),
+        'val_ver_threshold': val_metrics.get('ver_threshold', 0.5),
         'val_loss': val_metrics['loss'],
         'config': config,
         'mining': args.mining
