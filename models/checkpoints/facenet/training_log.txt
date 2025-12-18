@@ -1,0 +1,33 @@
+============================================================
+START FACENET TRAINING
+Start time: 2025-12-18 02:06:32.841806
+Device: cpu
+============================================================
+============================================================
+START FACENET TRAINING
+Start time: 2025-12-18 02:13:08.161143
+Device: cpu
+============================================================
+============================================================
+START FACENET TRAINING
+Start time: 2025-12-18 02:25:19.788350
+Device: cpu
+============================================================
+============================================================
+START FACENET TRAINING
+Start time: 2025-12-18 02:45:34.396563
+Device: cpu
+============================================================
+[Epoch 1/5] Train Loss: 0.0302 | LR: 1.00e-04
+Saved best model (facenet_best.pth)
+[Epoch 2/5] Train Loss: 0.0306 | LR: 1.00e-04
+[Epoch 3/5] Train Loss: 0.0301 | LR: 1.00e-04
+Saved best model (facenet_best.pth)
+[Epoch 4/5] Train Loss: 0.0289 | LR: 1.00e-04
+Saved best model (facenet_best.pth)
+[Epoch 5/5] Train Loss: 0.0285 | LR: 1.00e-04
+Saved best model (facenet_best.pth)
+============================================================
+TRAINING FINISHED in 6.08 hours
+Best training loss: 0.0285
+============================================================
