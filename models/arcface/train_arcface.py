@@ -127,7 +127,11 @@ def compute_verification_accuracy(embeddings, labels, num_pairs=10000, threshold
         best_threshold: nguong toi uu
         metrics: dict chua chi tiet
     """
-    from sklearn.metrics.pairwise import cosine_similarity
+    def cosine_sim(a, b):
+        """Tinh cosine similarity giua 2 vectors bang numpy"""
+        a_norm = a / (np.linalg.norm(a) + 1e-8)
+        b_norm = b / (np.linalg.norm(b) + 1e-8)
+        return np.dot(a_norm, b_norm)
     
     n = len(embeddings)
     if n < 2:
@@ -165,11 +169,11 @@ def compute_verification_accuracy(embeddings, labels, num_pairs=10000, threshold
     all_pairs = pos_pairs + neg_pairs
     np.random.shuffle(all_pairs)
     
-    # Tinh similarities
+    # Tinh similarities bang numpy (thay vi sklearn)
     similarities = []
     true_labels = []
     for i, j, label in all_pairs:
-        sim = cosine_similarity([embeddings[i]], [embeddings[j]])[0][0]
+        sim = cosine_sim(embeddings[i], embeddings[j])
         similarities.append(sim)
         true_labels.append(label)
     
