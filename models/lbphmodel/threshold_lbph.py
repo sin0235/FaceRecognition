@@ -3,7 +3,7 @@ import numpy as np
 from .evaluate_lbph import evaluate_lbph
 
 
-def find_optimal_threshold(model, val_faces, val_labels, 
+def find_optimal_threshold(model, faces, labels, 
                           min_coverage=0.3, 
                           threshold_range=None):
     """
@@ -15,30 +15,31 @@ def find_optimal_threshold(model, val_faces, val_labels,
     
     Args:
         model: LBPH model đã train
-        val_faces: List ảnh validation (grayscale)
-        val_labels: numpy array labels tương ứng
+        faces: List ảnh validation (grayscale)
+        labels: numpy array labels tương ứng
         min_coverage: Coverage tối thiểu cần đảm bảo (default=0.3)
         threshold_range: Range các threshold để thử (default=range(40,121,5))
         
     Returns:
         best_threshold (int): Threshold tối ưu
-        metrics_history (list): List of (threshold, accuracy, coverage, score) tuples
+        best_score (float): Score tốt nhất (accuracy * coverage)
+        threshold_results (list): List of (threshold, accuracy, coverage, score) tuples
         
     Example:
-        >>> best_thr, history = find_optimal_threshold(model, val_faces, val_labels)
-        >>> print(f"Best threshold: {best_thr}")
+        >>> best_thr, best_sc, results = find_optimal_threshold(model, val_faces, val_labels)
+        >>> print(f"Best threshold: {best_thr}, Score: {best_sc}")
     """
     if threshold_range is None:
         threshold_range = range(40, 121, 5)
     
     best_threshold = None
     best_score = -1
-    metrics_history = []
+    threshold_results = []
 
     for threshold in threshold_range:
         # Evaluate với threshold này
         accuracy, coverage, used, _ = evaluate_lbph(
-            model, val_faces, val_labels, threshold
+            model, faces, labels, threshold
         )
         
         # Tính score (chỉ xét nếu coverage đủ lớn)
@@ -46,13 +47,8 @@ def find_optimal_threshold(model, val_faces, val_labels,
             # Trade-off score: cân bằng giữa accuracy và coverage
             score = accuracy * coverage
             
-            metrics_history.append({
-                'threshold': threshold,
-                'accuracy': accuracy,
-                'coverage': coverage,
-                'used': used,
-                'score': score
-            })
+            # Lưu kết quả dạng tuple để khớp với notebook
+            threshold_results.append((threshold, accuracy, coverage, score))
             
             if score > best_score:
                 best_score = score
@@ -62,5 +58,6 @@ def find_optimal_threshold(model, val_faces, val_labels,
         # Fallback: nếu không threshold nào thỏa min_coverage, chọn threshold cao nhất
         print(f"Warning: No threshold achieves min_coverage={min_coverage}")
         best_threshold = max(threshold_range)
+        best_score = 0.0
     
-    return best_threshold, metrics_history
+    return best_threshold, best_score, threshold_results
