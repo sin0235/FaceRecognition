@@ -28,7 +28,7 @@ training:
 
   optimizer:
     type: sgd
-    lr: 0.001 # GIAM TU 0.1 XUONG 0.01 - phu hop dataset nho
+    lr: 0.01 # GIAM TU 0.1 XUONG 0.01 - phu hop dataset nho
     momentum: 0.9
     weight_decay: 0.001 # Giam weight_decay de tranh underfitting
 
@@ -46,6 +46,7 @@ training:
     enabled: true
     patience: 20 # Tang patience vi cosine scheduler giam cham
     min_delta: 0.0001
+    mode: max
 
 # Data Configuration
 data:
