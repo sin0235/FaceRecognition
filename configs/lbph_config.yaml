@@ -1,0 +1,6 @@
+lbph:
+  default_threshold: 120
+  target_size:
+  - 100
+  - 100
+  use_face_detection: true

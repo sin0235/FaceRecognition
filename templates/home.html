@@ -526,9 +526,24 @@
           <td style="color: #6b7280; padding: 4px 0">Distance</td>
           <td style="text-align: right; color: #f59e0b; font-size: 12px">
             {{ "%.2f"|format(result.lbph.detail.distance|default(0)) }}
-            (Chi-Square)
+            <span style="color: #94a3b8; font-size: 11px">(Chi-Square, lower is better)</span>
           </td>
         </tr>
+        <tr>
+          <td style="color: #6b7280; padding: 4px 0">Threshold</td>
+          <td style="text-align: right; color: #64748b; font-size: 12px">
+            {{ result.lbph.detail.threshold|default(80) }}
+            <span style="color: #94a3b8; font-size: 11px">(distance &lt; threshold = accepted)</span>
+          </td>
+        </tr>
+        {% if result.lbph.detail.predicted_label is defined %}
+        <tr>
+          <td style="color: #6b7280; padding: 4px 0">Label ID</td>
+          <td style="text-align: right; color: #64748b; font-size: 12px">
+            {{ result.lbph.detail.predicted_label }}
+          </td>
+        </tr>
+        {% endif %}
         <tr>
           <td style="color: #6b7280; padding: 4px 0">Thời gian</td>
           <td style="text-align: right; color: #059669">
@@ -536,6 +551,37 @@
           </td>
         </tr>
       </table>
+
+      {% if result.lbph.detail.top_k %}
+      <div
+        style="
+          margin-top: 10px;
+          padding-top: 10px;
+          border-top: 1px solid #e5e7eb;
+        "
+      >
+        <div style="font-size: 11px; color: #6b7280; margin-bottom: 6px">
+          Top Matches:
+        </div>
+        {% for item in result.lbph.detail.top_k[:3] %}
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            padding: 2px 0;
+          "
+        >
+          <span
+            >{{ item[0][:12] }}{% if item[0]|length > 12 %}...{% endif %}</span
+          >
+          <span style="color: #6b7280">
+            {{ "%.2f"|format(item[1] * 100) }}% (dist: {{ "%.1f"|format(item[2]) }})
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
     </div>
   </div>
 

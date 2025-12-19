@@ -17,6 +17,7 @@ import uuid
 import atexit
 import shutil
 import time
+import yaml
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT_DIR)
@@ -119,6 +120,7 @@ realtime_arcface_engine = None
 facenet_engine = None
 lbph_model = None
 lbph_label_map = None
+LBPH_DEFAULT_THRESHOLD = 100
 explainability_engine = None
 
 
@@ -211,11 +213,33 @@ def get_facenet_engine():
     return facenet_engine
 
 
+def _load_lbph_config():
+    """Load LBPH config (threshold, ... ) từ configs/lbph_config.yaml nếu có."""
+    global LBPH_DEFAULT_THRESHOLD
+    try:
+        config_path = os.path.join(ROOT_DIR, "configs/lbph_config.yaml")
+        if os.path.exists(config_path):
+            with open(config_path, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+            lbph_cfg = cfg.get("lbph", {})
+            thr = lbph_cfg.get("default_threshold")
+            if isinstance(thr, (int, float)):
+                LBPH_DEFAULT_THRESHOLD = int(thr)
+                print(f"[LBPH CONFIG] Loaded default_threshold={LBPH_DEFAULT_THRESHOLD} from lbph_config.yaml")
+    except Exception as e:
+        print(f"[LBPH CONFIG] Error loading lbph_config.yaml: {e}")
+
+
 def get_lbph_model():
     global lbph_model, lbph_label_map
     if lbph_model is None:
         try:
-            lbph_path = os.path.join(ROOT_DIR, "models/checkpoints/LBHP/lbph_full_celeba.xml")
+            # Thử load từ lbph_model.xml (checkpoint mới)
+            lbph_path = os.path.join(ROOT_DIR, "models/checkpoints/LBHP/lbph_model.xml")
+            if not os.path.exists(lbph_path):
+                # Fallback: thử file cũ
+                lbph_path = os.path.join(ROOT_DIR, "models/checkpoints/LBHP/lbph_full_celeba.xml")
+            
             if os.path.exists(lbph_path):
                 lbph_model = cv2.face.LBPHFaceRecognizer_create()
                 lbph_model.read(lbph_path)
@@ -223,20 +247,65 @@ def get_lbph_model():
                 label_map_path = os.path.join(ROOT_DIR, "models/checkpoints/LBHP/label_map.npy")
                 if os.path.exists(label_map_path):
                     lbph_label_map = np.load(label_map_path, allow_pickle=True).item()
+                    print(f"Loaded label_map with {len(lbph_label_map)} identities")
                 else:
+                    # Thử tạo label_map từ metadata CSV
                     metadata_path = os.path.join(ROOT_DIR, "data/metadata/train_labels.csv")
                     if os.path.exists(metadata_path):
-                        import pandas as pd
-                        df = pd.read_csv(metadata_path)
-                        mapping_df = df[['label', 'identity_id']].drop_duplicates()
-                        lbph_label_map = dict(zip(mapping_df['label'], mapping_df['identity_id']))
-                        np.save(label_map_path, lbph_label_map)
-                        print(f"Created label_map with {len(lbph_label_map)} identities")
+                        try:
+                            import pandas as pd
+                            df = pd.read_csv(metadata_path)
+                            if 'label' in df.columns and 'identity_id' in df.columns:
+                                mapping_df = df[['label', 'identity_id']].drop_duplicates()
+                                lbph_label_map = dict(zip(mapping_df['label'], mapping_df['identity_id']))
+                                np.save(label_map_path, lbph_label_map)
+                                print(f"Created label_map from CSV with {len(lbph_label_map)} identities")
+                            else:
+                                print("[WARNING] CSV không có đúng columns, tạo label_map từ dataset structure")
+                                lbph_label_map = _create_label_map_from_dataset()
+                        except Exception as e:
+                            print(f"[WARNING] Không thể tạo label_map từ CSV: {e}")
+                            lbph_label_map = _create_label_map_from_dataset()
+                    else:
+                        # Tạo label_map từ dataset structure (identity folders)
+                        lbph_label_map = _create_label_map_from_dataset()
                 
-                print("LBPH model loaded")
+                # Load LBPH config (threshold, ...)
+                _load_lbph_config()
+                
+                print(f"LBPH model loaded from: {lbph_path}")
+                print(f"Label map: {len(lbph_label_map) if lbph_label_map else 0} identities")
         except Exception as e:
             print(f"LBPH error: {e}")
+            import traceback
+            traceback.print_exc()
     return lbph_model
+
+
+def _create_label_map_from_dataset():
+    """Tạo label_map từ cấu trúc dataset (identity folders)"""
+    try:
+        train_dir = os.path.join(ROOT_DIR, "data/CelebA_Aligned_Balanced/train")
+        if not os.path.exists(train_dir):
+            train_dir = os.path.join(ROOT_DIR, "data/CelebA_Aligned/train")
+        
+        if os.path.exists(train_dir):
+            identities = sorted([d for d in os.listdir(train_dir) 
+                               if os.path.isdir(os.path.join(train_dir, d))])
+            # Tạo mapping: label_id -> identity_name
+            # LBPH model dùng label là số (0, 1, 2, ...) tương ứng với thứ tự identity
+            label_map = {i: identity for i, identity in enumerate(identities)}
+            
+            label_map_path = os.path.join(ROOT_DIR, "models/checkpoints/LBHP/label_map.npy")
+            np.save(label_map_path, label_map)
+            print(f"Created label_map from dataset with {len(label_map)} identities")
+            return label_map
+        else:
+            print(f"[WARNING] Không tìm thấy train directory: {train_dir}")
+            return None
+    except Exception as e:
+        print(f"[WARNING] Không thể tạo label_map từ dataset: {e}")
+        return None
 
 
 def get_explainability_engine():
@@ -466,33 +535,141 @@ def recognize_with_facenet(image_path, threshold=0.5):
         return {"identity": str(e), "confidence": 0.0, "status": "error", "time_ms": round((time.time() - start_time) * 1000, 2), "face_detection": face_detection}
 
 
-def recognize_with_lbph(image_path, threshold=80):
+def recognize_with_lbph(image_path, threshold=None):
     start_time = time.time()
     model = get_lbph_model()
     if model is None:
-        return {"identity": "Model not loaded", "confidence": 0.0, "status": "error", "time_ms": 0, "face_detection": None}
+        return {"identity": "Model not loaded", "confidence": 0.0, "status": "error", "time_ms": 0, "face_detection": None, "top_k": []}
     
     face_detection = extract_face_detection_info(image_path)
+    
+    # Nếu threshold không truyền vào, dùng default từ config
+    if threshold is None:
+        threshold = LBPH_DEFAULT_THRESHOLD
     
     try:
         # Detect va crop face (100x100 grayscale)
         cropped_face = detect_and_crop_face(image_path, target_size=(100, 100), grayscale=True)
         
         if cropped_face is None:
-            return {"identity": "Cannot detect face", "confidence": 0.0, "status": "error", "time_ms": 0, "face_detection": face_detection}
+            return {"identity": "Cannot detect face", "confidence": 0.0, "status": "error", "time_ms": 0, "face_detection": face_detection, "top_k": []}
         
         img = cropped_face  # Already resized to 100x100 grayscale
         label, distance = model.predict(img)
         
+        # Debug info
+        print(f"[LBPH DEBUG] Predicted label: {label}, Distance: {distance:.2f}, Threshold: {threshold}")
+        
+        # Lấy identity từ label_map
         identity = lbph_label_map.get(label, f"Person_{label}") if lbph_label_map else f"Person_{label}"
-        confidence = max(0, (100 - distance) / 100)
-        if distance > threshold:
+        
+        # Tính confidence (distance càng thấp càng tốt, normalize về [0, 1])
+        # Distance thường trong khoảng 0-200+, normalize về [0, 1]
+        confidence = max(0, min(1, (200 - distance) / 200)) if distance < 200 else 0.0
+        
+        # Tính top-k bằng cách predict với sample faces từ train set
+        top_k = []
+        if lbph_label_map:
+            top_k = _get_lbph_top_k(model, img, lbph_label_map, k=5)
+        
+        # Quyết định Unknown dựa trên threshold
+        is_unknown = distance > threshold
+        if is_unknown:
             identity = "Unknown"
         
         elapsed = round((time.time() - start_time) * 1000, 2)
-        return {"identity": identity, "confidence": float(confidence), "distance": float(distance), "status": "success", "time_ms": elapsed, "face_detection": face_detection}
+        return {
+            "identity": identity,
+            "confidence": float(confidence),
+            "distance": float(distance),
+            "threshold": threshold,
+            "predicted_label": int(label),
+            "top_k": top_k,
+            "status": "success",
+            "time_ms": elapsed,
+            "face_detection": face_detection
+        }
     except Exception as e:
-        return {"identity": str(e), "confidence": 0.0, "status": "error", "time_ms": round((time.time() - start_time) * 1000, 2), "face_detection": face_detection}
+        import traceback
+        print(f"[LBPH ERROR] {e}")
+        traceback.print_exc()
+        return {"identity": str(e), "confidence": 0.0, "status": "error", "time_ms": round((time.time() - start_time) * 1000, 2), "face_detection": face_detection, "top_k": []}
+
+
+def _get_lbph_top_k(model, face_img, label_map, k=5, max_identities=30):
+    """
+    Tính top-k predictions cho LBPH bằng cách predict với sample faces từ train set
+    
+    Args:
+        model: LBPH model
+        face_img: Ảnh face đã preprocessed (grayscale)
+        label_map: Dict mapping label_id -> identity_name
+        k: Số lượng top predictions
+        max_identities: Số lượng identities tối đa để test (để tránh quá chậm)
+    
+    Returns:
+        List of (identity_name, confidence, distance) tuples
+    """
+    top_k = []
+    
+    try:
+        # Load sample faces từ train set để tính distance
+        train_dir = os.path.join(ROOT_DIR, "data/CelebA_Aligned_Balanced/train")
+        if not os.path.exists(train_dir):
+            train_dir = os.path.join(ROOT_DIR, "data/CelebA_Aligned/train")
+        
+        if not os.path.exists(train_dir):
+            return []
+        
+        # Tính distance với một số identities (giới hạn để tránh quá chậm)
+        identity_distances = {}
+        identities_to_test = list(label_map.items())[:max_identities]
+        
+        for label_id, identity_name in identities_to_test:
+            identity_path = os.path.join(train_dir, identity_name)
+            if not os.path.isdir(identity_path):
+                continue
+            
+            # Lấy 1 sample face từ identity này để test
+            sample_files = [f for f in os.listdir(identity_path) 
+                          if f.lower().endswith(('.jpg', '.png', '.jpeg'))]
+            
+            if not sample_files:
+                continue
+            
+            # Chỉ test với 1 sample để nhanh hơn
+            sample_file = sample_files[0]
+            sample_path = os.path.join(identity_path, sample_file)
+            
+            try:
+                sample_img = cv2.imread(sample_path, cv2.IMREAD_GRAYSCALE)
+                if sample_img is None:
+                    continue
+                # Resize về cùng kích thước với face_img
+                sample_img = cv2.resize(sample_img, (face_img.shape[1], face_img.shape[0]))
+                
+                # Predict với sample này
+                pred_label, dist = model.predict(sample_img)
+                
+                # Tính confidence từ distance
+                conf = max(0, min(1, (200 - dist) / 200)) if dist < 200 else 0.0
+                identity_distances[identity_name] = (conf, dist)
+            except Exception as e:
+                continue
+        
+        # Sort theo distance (thấp nhất = tốt nhất)
+        sorted_items = sorted(identity_distances.items(), key=lambda x: x[1][1])
+        
+        # Format top-k
+        for identity_name, (conf, dist) in sorted_items[:k]:
+            top_k.append((identity_name, float(conf), float(dist)))
+        
+    except Exception as e:
+        print(f"[LBPH Top-K Error] {e}")
+        import traceback
+        traceback.print_exc()
+    
+    return top_k
 
 
 def get_test_data_info():
@@ -631,6 +808,7 @@ def home():
             try:
                 arcface_result = recognize_with_arcface(image_to_process, threshold_val)
                 facenet_result = recognize_with_facenet(image_to_process, threshold_val)
+                # LBPH dùng threshold default từ config (LBPH_DEFAULT_THRESHOLD) nếu không truyền vào
                 lbph_result = recognize_with_lbph(image_to_process)
                 
                 def fmt(res):
@@ -916,7 +1094,7 @@ def recognize_frame(frame):
         elif realtime_model == "facenet":
             result = recognize_with_facenet(temp_path, threshold=0.5)
         elif realtime_model == "lbph":
-            result = recognize_with_lbph(temp_path, threshold=80)
+            result = recognize_with_lbph(temp_path, threshold=100)
         
         detector = get_realtime_detector()
         detection = detector.detect(frame) if detector else None
@@ -1040,6 +1218,155 @@ def set_realtime_model():
         realtime_model = model
         return jsonify({"status": "success", "model": model})
     return jsonify({"status": "error", "message": "Invalid model"})
+
+
+@app.route("/database-builder")
+def database_builder():
+    """Trang Database Builder"""
+    # Lấy danh sách checkpoints có sẵn
+    arcface_models = []
+    facenet_models = []
+    
+    arcface_dir = os.path.join(ROOT_DIR, "models/checkpoints/arcface")
+    if os.path.exists(arcface_dir):
+        arcface_models = [f for f in os.listdir(arcface_dir) if f.endswith('.pth')]
+    
+    facenet_dir = os.path.join(ROOT_DIR, "models/checkpoints/facenet")
+    if os.path.exists(facenet_dir):
+        facenet_models = [f for f in os.listdir(facenet_dir) if f.endswith('.pth')]
+    
+    # Lấy danh sách dataset directories
+    data_root = os.path.join(ROOT_DIR, "data")
+    dataset_dirs = []
+    if os.path.exists(data_root):
+        for item in os.listdir(data_root):
+            item_path = os.path.join(data_root, item)
+            if os.path.isdir(item_path) and not item.startswith('.'):
+                dataset_dirs.append(item)
+    
+    return render_template(
+        "database_builder.html",
+        active="database_builder",
+        arcface_models=arcface_models,
+        facenet_models=facenet_models,
+        dataset_dirs=dataset_dirs
+    )
+
+
+@app.route("/database-builder/build", methods=["POST"])
+def build_database():
+    """Bắt đầu build database"""
+    try:
+        from inference.database_builder import get_builder
+        import uuid
+        
+        data = request.get_json()
+        model_type = data.get("model_type")
+        
+        if not model_type or model_type not in ["arcface", "facenet", "lbph"]:
+            return jsonify({"error": "Model type không hợp lệ"}), 400
+        
+        # Tạo config dựa trên model type
+        config = {}
+        
+        if model_type in ["arcface", "facenet"]:
+            model_path = data.get("model_path")
+            if not model_path:
+                return jsonify({"error": "Cần chọn model checkpoint"}), 400
+            
+            # Build full path
+            model_dir = os.path.join(ROOT_DIR, f"models/checkpoints/{model_type}")
+            config["model_path"] = os.path.join(model_dir, model_path)
+            
+            if not os.path.exists(config["model_path"]):
+                return jsonify({"error": f"Model không tồn tại: {config['model_path']}"}), 400
+        
+        # Common config
+        data_dir = data.get("data_dir")
+        if not data_dir:
+            return jsonify({"error": "Cần chọn dataset directory"}), 400
+        
+        config["data_dir"] = os.path.join(ROOT_DIR, "data", data_dir)
+        
+        if not os.path.exists(config["data_dir"]):
+            return jsonify({"error": f"Dataset không tồn tại: {config['data_dir']}"}), 400
+        
+        config["use_face_detection"] = data.get("use_face_detection", True)
+        config["device"] = data.get("device", "cpu")
+        
+        # Model-specific config
+        if model_type == "lbph":
+            config["output_dir"] = os.path.join(ROOT_DIR, data.get("output_dir", "models/checkpoints/LBHP"))
+            config["model_name"] = data.get("model_name", "lbph_model.xml")
+            config["radius"] = int(data.get("radius", 1))
+            config["neighbors"] = int(data.get("neighbors", 8))
+            config["grid_x"] = int(data.get("grid_x", 8))
+            config["grid_y"] = int(data.get("grid_y", 8))
+            config["target_size"] = [int(data.get("target_width", 100)), int(data.get("target_height", 100))]
+            config["find_threshold"] = data.get("find_threshold", False)
+            
+            if config["find_threshold"]:
+                val_dir = data.get("val_dir")
+                if val_dir:
+                    config["val_dir"] = os.path.join(ROOT_DIR, "data", val_dir)
+        else:
+            # ArcFace/FaceNet
+            output_filename = data.get("output_filename", f"{model_type}_embeddings_db.npy")
+            config["output_path"] = os.path.join(ROOT_DIR, "data", output_filename)
+        
+        # Tạo job
+        job_id = str(uuid.uuid4())
+        builder = get_builder()
+        job = builder.create_job(job_id, model_type, config)
+        
+        # Bắt đầu build trong background
+        builder.start_build(job_id)
+        
+        return jsonify({
+            "status": "success",
+            "job_id": job_id,
+            "message": "Build process đã bắt đầu"
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/database-builder/status/<job_id>")
+def get_build_status(job_id):
+    """Lấy trạng thái build job"""
+    try:
+        from inference.database_builder import get_builder
+        
+        builder = get_builder()
+        job = builder.get_job(job_id)
+        
+        if not job:
+            return jsonify({"error": "Job không tồn tại"}), 404
+        
+        return jsonify(job.to_dict())
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/database-builder/download/<path:filename>")
+def download_database_file(filename):
+    """Download file database đã tạo"""
+    try:
+        from flask import send_file
+        
+        # Security: chỉ cho phép download từ data/ hoặc models/checkpoints/
+        if filename.startswith("data/") or filename.startswith("models/checkpoints/"):
+            filepath = os.path.join(ROOT_DIR, filename)
+            
+            if os.path.exists(filepath):
+                return send_file(filepath, as_attachment=True)
+        
+        return jsonify({"error": "File không tồn tại"}), 404
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
