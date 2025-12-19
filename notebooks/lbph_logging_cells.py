@@ -204,19 +204,20 @@ print(f"Top {top_n} classes: {top_classes}")
 top_mask = np.isin(val_true_labels, top_classes)
 top_true = np.array(val_true_labels)[top_mask]
 top_pred = val_predictions[top_mask]
-top_conf = val_confidences_all[top_mask]
 
-# Chỉ lấy predictions có confidence <= threshold
-accepted_mask = top_conf <= best_threshold
-top_true_accepted = top_true[accepted_mask]
-top_pred_accepted = top_pred[accepted_mask]
+# KHÔNG FILTER theo threshold - hiển thị tất cả predictions
+# Để đánh giá toàn diện khả năng phân loại của model
+print(f"Vẽ confusion matrix cho {len(top_true)} predictions (không filter theo threshold)")
 
-if len(top_true_accepted) > 0:
+if len(top_true) > 0:
     # Tạo confusion matrix
-    cm = confusion_matrix(top_true_accepted, top_pred_accepted, labels=top_classes)
+    cm = confusion_matrix(top_true, top_pred, labels=top_classes)
     
-    # Normalize confusion matrix
-    cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+    # Normalize confusion matrix (safe division)
+    row_sums = cm.sum(axis=1)[:, np.newaxis]
+    cm_normalized = np.divide(cm.astype('float'), row_sums, 
+                              where=row_sums!=0,
+                              out=np.zeros_like(cm, dtype=float))
     
     # Vẽ confusion matrix
     fig, ax = plt.subplots(figsize=(12, 10))
@@ -227,7 +228,7 @@ if len(top_true_accepted) > 0:
     
     ax.set_xlabel('Predicted Label', fontsize=12, fontweight='bold')
     ax.set_ylabel('True Label', fontsize=12, fontweight='bold')
-    ax.set_title(f'Confusion Matrix (Top {top_n} Classes, Val Set)', fontsize=14, fontweight='bold')
+    ax.set_title(f'Confusion Matrix (Top {top_n} Classes, All Predictions)', fontsize=14, fontweight='bold')
     
     plt.tight_layout()
     
@@ -238,7 +239,7 @@ if len(top_true_accepted) > 0:
     
     plt.show()
 else:
-    print("[WARNING] No accepted predictions for confusion matrix")
+    print("[WARNING] Không có predictions nào cho top classes")
 """
 
 # ==============================================================================

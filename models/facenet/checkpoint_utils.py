@@ -1,5 +1,6 @@
 """Helper function để load FaceNet checkpoint với key remapping tự động"""
 import torch
+import os
 
 def load_facenet_checkpoint_flexible(model, checkpoint_path):
     """
@@ -17,7 +18,29 @@ def load_facenet_checkpoint_flexible(model, checkpoint_path):
         model: Model với weights đã load
         checkpoint_info: Dict chứa thông tin checkpoint (epoch, metrics, etc)
     """
-    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+    # Validate checkpoint file
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(f"Checkpoint file không tồn tại: {checkpoint_path}")
+    
+    file_size = os.path.getsize(checkpoint_path)
+    if file_size == 0:
+        raise ValueError(f"Checkpoint file rỗng: {checkpoint_path}")
+    
+    if file_size < 1024:  # File quá nhỏ (< 1KB) có thể bị hỏng
+        raise ValueError(f"Checkpoint file có vẻ bị hỏng (kích thước: {file_size} bytes): {checkpoint_path}")
+    
+    print(f"[INFO] Loading checkpoint: {checkpoint_path} ({file_size / 1024 / 1024:.2f} MB)")
+    
+    try:
+        checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+    except RuntimeError as e:
+        if "failed finding central directory" in str(e) or "zip archive" in str(e):
+            raise RuntimeError(
+                f"Checkpoint file bị hỏng hoặc không đầy đủ: {checkpoint_path}\n"
+                f"Lỗi: {e}\n"
+                f"Vui lòng kiểm tra lại file checkpoint hoặc tải lại từ nguồn."
+            ) from e
+        raise
     state_dict = checkpoint['model_state_dict']
     
     # Get current model keys
@@ -61,12 +84,19 @@ def load_facenet_checkpoint_flexible(model, checkpoint_path):
             print(f"[WARNING] Missing keys ({len(important_missing)}): {important_missing[:5]}...")
     
     if unexpected_keys:
-        print(f"[WARNING] Unexpected keys ({len(unexpected_keys)}): {unexpected_keys[:5]}...")
+        # Filter out logits layer (thường có trong checkpoint nhưng không cần cho inference)
+        logits_keys = [k for k in unexpected_keys if 'logits' in k]
+        other_unexpected = [k for k in unexpected_keys if 'logits' not in k]
+        
+        if logits_keys:
+            print(f"[INFO] Ignored logits layer keys ({len(logits_keys)}): {logits_keys[:3]}...")
+        if other_unexpected:
+            print(f"[WARNING] Unexpected keys ({len(other_unexpected)}): {other_unexpected[:5]}...")
     
     if not missing_keys and not unexpected_keys:
         print("[OK] Checkpoint loaded perfectly")
     elif not important_missing:
-        print("[OK] Checkpoint loaded (projection layer initialized randomly - OK)")
+        print("[OK] Checkpoint loaded successfully")
     
     # Extract checkpoint info
     checkpoint_info = {
