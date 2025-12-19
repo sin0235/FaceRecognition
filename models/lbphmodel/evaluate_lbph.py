@@ -1,4 +1,5 @@
 import numpy as np
+from tqdm import tqdm
 
 def evaluate_lbph(model, faces, labels, threshold):
     """
@@ -24,8 +25,10 @@ def evaluate_lbph(model, faces, labels, threshold):
     correct = 0
     used = 0
     confidences = []
+    
+    print(f"Evaluating {len(faces)} images with threshold={threshold}...")
 
-    for img, true_label in zip(faces, labels):
+    for img, true_label in tqdm(zip(faces, labels), total=len(faces), desc="Evaluating"):
         pred, conf = model.predict(img)
         confidences.append(conf)
 

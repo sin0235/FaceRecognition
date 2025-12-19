@@ -1,5 +1,7 @@
 """Module tìm threshold tối ưu cho LBPH model."""
 import numpy as np
+import logging
+from tqdm import tqdm
 
 
 def find_optimal_threshold(model, faces, labels, 
@@ -37,25 +39,12 @@ def find_optimal_threshold(model, faces, labels,
     
     # BƯỚC 1: Predict cho tất cả samples 1 lần duy nhất
     import time
-    print(f"[THRESHOLD] Predicting {len(faces)} validation samples...")
+    logging.info(f"[THRESHOLD] Predicting {len(faces)} validation samples...")
     predictions = []
     confidences = []
     start_time = time.time()
     
-    for i, img in enumerate(faces):
-        # Hiển thị progress: mỗi 100 samples để dễ theo dõi
-        if i == 0 or (i + 1) % 100 == 0 or i == len(faces) - 1:
-            percent = ((i + 1) / len(faces)) * 100
-            elapsed = time.time() - start_time
-            if i > 0:
-                avg_time_per_sample = elapsed / (i + 1)
-                remaining_samples = len(faces) - (i + 1)
-                eta_seconds = avg_time_per_sample * remaining_samples
-                eta_minutes = eta_seconds / 60
-                print(f"  Progress: {i+1}/{len(faces)} ({percent:.1f}%) - ETA: {eta_minutes:.1f} phút")
-            else:
-                print(f"  Progress: {i+1}/{len(faces)} ({percent:.1f}%)")
-        
+    for i, img in enumerate(tqdm(faces, desc="[THRESHOLD] Predicting faces", unit="face")):
         pred, conf = model.predict(img)
         predictions.append(pred)
         confidences.append(conf)
@@ -63,10 +52,10 @@ def find_optimal_threshold(model, faces, labels,
     predictions = np.array(predictions)
     confidences = np.array(confidences)
     total_time = time.time() - start_time
-    print(f"[THRESHOLD] Prediction completed in {total_time/60:.2f} phút!")
+    print(f"[THRESHOLD] Prediction hoàn thành trong {total_time/60:.2f} phút!")
     
     # BƯỚC 2: Đánh giá với từng threshold (không cần predict lại)
-    print(f"[THRESHOLD] Evaluating {len(threshold_range)} thresholds...")
+    print(f"[THRESHOLD] Đang đánh giá {len(threshold_range)} thresholds...")
     best_threshold = None
     best_score = -1
     threshold_results = []
@@ -96,11 +85,11 @@ def find_optimal_threshold(model, faces, labels,
                 best_score = score
                 best_threshold = threshold
     
-    print(f"[THRESHOLD] Evaluation completed!")
+    print(f"[THRESHOLD] Đánh giá hoàn thành!")
     
     if best_threshold is None:
         # Fallback: nếu không threshold nào thỏa min_coverage, chọn threshold cao nhất
-        print(f"[WARNING] No threshold achieves min_coverage={min_coverage}")
+        print(f"[WARNING] Không có threshold nào đạt min_coverage={min_coverage}")
         best_threshold = max(threshold_range)
         best_score = 0.0
     
