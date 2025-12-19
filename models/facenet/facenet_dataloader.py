@@ -397,3 +397,12 @@ def create_online_dataloaders(train_dir, val_dir, batch_size=32,
     print(f"Effective batch size: {batch_size * images_per_identity} images")
     
     return train_loader, val_loader
+
+
+def get_val_transforms(image_size=160):
+    """Transforms cho validation/test set (không augmentation) cho FaceNet"""
+    return transforms.Compose([
+        transforms.Resize((image_size, image_size)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+    ])
