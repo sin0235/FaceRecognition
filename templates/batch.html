@@ -72,17 +72,18 @@
       >
         Xử lý Batch
       </button>
-      <div
-        id="loadingIndicator"
-        style="display: none; margin-top: 20px; text-align: center"
-      >
-        <div class="loading-spinner" style="margin: 0 auto"></div>
-        <p style="font-size: 13px; color: var(--muted); margin-top: 12px">
-          Đang xử lý <span id="processingCount">0</span> ảnh với 3 models...
-        </p>
-      </div>
     </div>
   </form>
+
+  <div id="loadingOverlay" class="loading-overlay" style="display: none">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Đang xử lý batch</div>
+      <div class="loading-subtext">
+        Đang xử lý <span id="processingCount">0</span> ảnh với 3 models
+      </div>
+    </div>
+  </div>
 
   {% if results %}
   <div style="margin-top: 40px">
@@ -926,7 +927,7 @@
   const imageCount = document.getElementById("imageCount");
   const form = document.getElementById("batchForm");
   const submitBtn = document.getElementById("submitBtn");
-  const loadingIndicator = document.getElementById("loadingIndicator");
+  const loadingOverlay = document.getElementById("loadingOverlay");
   const processingCount = document.getElementById("processingCount");
 
   // Chỉ cho phép label trigger file input, không dùng uploadZone click
@@ -1009,8 +1010,11 @@
     selectedFiles.forEach((file) => dataTransfer.items.add(file));
     imageInput.files = dataTransfer.files;
 
-    submitBtn.style.display = "none";
-    loadingIndicator.style.display = "block";
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = "0.6";
+    submitBtn.style.cursor = "not-allowed";
+
+    loadingOverlay.style.display = "flex";
     processingCount.textContent = selectedFiles.length;
   });
 

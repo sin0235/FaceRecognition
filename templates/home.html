@@ -134,18 +134,12 @@
     </div>
     {% endif %}
 
-    <div id="loadingIndicator" style="display: none; margin-top: 20px">
-      <div class="loading-spinner" style="margin: 0 auto"></div>
-      <p
-        style="
-          font-size: 13px;
-          color: #64748b;
-          margin-top: 12px;
-          text-align: center;
-        "
-      >
-        Đang xử lý với 3 models...
-      </p>
+    <div id="loadingOverlay" class="loading-overlay" style="display: none">
+      <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <div class="loading-text" id="loadingText">Đang xử lý nhận dạng</div>
+        <div class="loading-subtext">Vui lòng đợi, đang xử lý với 3 models</div>
+      </div>
     </div>
   </form>
 
@@ -200,10 +194,16 @@
         return;
       }
 
-      document.getElementById('loadingIndicator').style.display = 'block';
+      const loadingOverlay = document.getElementById('loadingOverlay');
+      if (loadingOverlay) {
+        loadingOverlay.style.display = 'flex';
+      }
+
       const submitBtn = document.getElementById('submitBtn');
       if (submitBtn) {
-        submitBtn.style.display = 'none';
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.6';
+        submitBtn.style.cursor = 'not-allowed';
       }
     });
   </script>
@@ -526,14 +526,18 @@
           <td style="color: #6b7280; padding: 4px 0">Distance</td>
           <td style="text-align: right; color: #f59e0b; font-size: 12px">
             {{ "%.2f"|format(result.lbph.detail.distance|default(0)) }}
-            <span style="color: #94a3b8; font-size: 11px">(Chi-Square, lower is better)</span>
+            <span style="color: #94a3b8; font-size: 11px"
+              >(Chi-Square, lower is better)</span
+            >
           </td>
         </tr>
         <tr>
           <td style="color: #6b7280; padding: 4px 0">Threshold</td>
           <td style="text-align: right; color: #64748b; font-size: 12px">
             {{ result.lbph.detail.threshold|default(80) }}
-            <span style="color: #94a3b8; font-size: 11px">(distance &lt; threshold = accepted)</span>
+            <span style="color: #94a3b8; font-size: 11px"
+              >(distance &lt; threshold = accepted)</span
+            >
           </td>
         </tr>
         {% if result.lbph.detail.predicted_label is defined %}
@@ -576,7 +580,8 @@
             >{{ item[0][:12] }}{% if item[0]|length > 12 %}...{% endif %}</span
           >
           <span style="color: #6b7280">
-            {{ "%.2f"|format(item[1] * 100) }}% (dist: {{ "%.1f"|format(item[2]) }})
+            {{ "%.2f"|format(item[1] * 100) }}% (dist: {{ "%.1f"|format(item[2])
+            }})
           </span>
         </div>
         {% endfor %}

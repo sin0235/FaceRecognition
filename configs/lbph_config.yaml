@@ -1,5 +1,5 @@
 lbph:
-  default_threshold: 120
+  default_threshold: 100
   target_size:
   - 100
   - 100

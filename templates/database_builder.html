@@ -571,7 +571,7 @@
           class="collapse-toggle"
           onclick="toggleCollapse('lbph-advanced')"
         >
-          ⚙️ Tùy chọn nâng cao
+          Tùy chọn nâng cao
         </button>
 
         <div class="collapse-content" id="lbph-advanced">
@@ -671,15 +671,16 @@
         <div class="log-container" id="log-container">
           <div class="log-line">Waiting for logs...</div>
         </div>
-
-        <div class="output-files" id="output-files" style="display: none">
-          <h4 style="margin-bottom: 12px; font-size: 14px; font-weight: 600">
-            Output Files
-          </h4>
-          <div id="output-files-list"></div>
-        </div>
       </div>
     </div>
+  </div>
+</div>
+
+<div id="loadingOverlay" class="loading-overlay" style="display: none">
+  <div class="loading-content">
+    <div class="loading-spinner"></div>
+    <div class="loading-text" id="loadingText">Đang build database</div>
+    <div class="loading-subtext" id="loadingSubtext">Đang khởi tạo...</div>
   </div>
 </div>
 
@@ -834,6 +835,12 @@
       btn.style.cursor = "not-allowed";
     });
 
+    // Show loading overlay
+    const loadingOverlay = document.getElementById("loadingOverlay");
+    const loadingSubtext = document.getElementById("loadingSubtext");
+    loadingOverlay.style.display = "flex";
+    loadingSubtext.textContent = "Đang tải model và khởi tạo...";
+
     fetch("/database-builder/build", {
       method: "POST",
       headers: {
@@ -850,6 +857,9 @@
         }
 
         currentJobId = data.job_id;
+
+        // Hide loading overlay and show progress section
+        loadingOverlay.style.display = "none";
         document.getElementById("progress-section").classList.add("active");
 
         // Scroll to progress
@@ -907,31 +917,6 @@
       logContainer.appendChild(line);
     });
     logContainer.scrollTop = logContainer.scrollHeight;
-
-    // Update output files
-    if (Object.keys(data.output_files).length > 0) {
-      const filesSection = document.getElementById("output-files");
-      filesSection.style.display = "block";
-
-      const filesList = document.getElementById("output-files-list");
-      filesList.innerHTML = "";
-
-      Object.entries(data.output_files).forEach(([label, path]) => {
-        const fileDiv = document.createElement("div");
-        fileDiv.className = "output-file";
-        fileDiv.innerHTML = `
-          <span><strong>${label}:</strong> ${path}</span>
-          <button class="btn-download" onclick="downloadFile('${path}')">
-            Download
-          </button>
-        `;
-        filesList.appendChild(fileDiv);
-      });
-    }
-  }
-
-  function downloadFile(path) {
-    window.location.href = `/database-builder/download/${path}`;
   }
 
   function resetButtons() {
@@ -940,6 +925,12 @@
       btn.style.opacity = "1";
       btn.style.cursor = "pointer";
     });
+
+    // Hide loading overlay
+    const loadingOverlay = document.getElementById("loadingOverlay");
+    if (loadingOverlay) {
+      loadingOverlay.style.display = "none";
+    }
   }
 </script>
 

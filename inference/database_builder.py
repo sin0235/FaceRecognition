@@ -177,15 +177,9 @@ class DatabaseBuilder:
         )
         
         model_path = os.path.join(output_dir, model_name)
-        label_map_path = os.path.join(output_dir, "label_map.npy")
         
+        # Chỉ add model file chính, không add label_map và threshold
         job.add_output_file("LBPH Model", model_path)
-        job.add_output_file("Label Map", label_map_path)
-        
-        if find_threshold and val_dir:
-            threshold_path = os.path.join(output_dir, "optimal_threshold.txt")
-            if os.path.exists(threshold_path):
-                job.add_output_file("Threshold Analysis", threshold_path)
     
     def _build_arcface(self, job: BuildJob):
         """Build ArcFace embeddings database"""
