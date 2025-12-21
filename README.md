@@ -385,8 +385,6 @@ Distributed under the **MIT License**. See [LICENSE](LICENSE) for more informati
 <!-- Footer Banner -->
 <img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=120&section=footer" width="100%"/>
 
-**Developed with passion by [Tran Phuc Toan](https://github.com/sin0235)**
-
 _HCMUTE - Digital Image Processing - 2025_
 
 </div>
