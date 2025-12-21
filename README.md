@@ -1,7 +1,7 @@
 <div align="center">
 
 <!-- Header Banner -->
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=180&section=header&text=Face%20Recognition%20System&fontSize=42&fontColor=fff&animation=twinkling&fontAlignY=32&desc=Enterprise-Grade%20Multi-Model%20Face%20Recognition%20Platform&descAlignY=52&descSize=18" width="100%"/>
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=180&section=header&text=Face%20Recognition%20System&fontSize=42&fontColor=fff&animation=twinkling&fontAlignY=32&desc=Project%20Digital%20Image%20Processing&descAlignY=52&descSize=18" width="100%"/>
 
 <!-- Badges Row 1 -->
 <p>
@@ -18,24 +18,11 @@
   <img src="https://img.shields.io/badge/Status-Active-success?style=for-the-badge" alt="Status"/>
 </p>
 
-<!-- Navigation -->
-<p>
-  <a href="#-overview">Overview</a> &nbsp;&bull;&nbsp;
-  <a href="#-features">Features</a> &nbsp;&bull;&nbsp;
-  <a href="#-models">Models</a> &nbsp;&bull;&nbsp;
-  <a href="#-installation">Installation</a> &nbsp;&bull;&nbsp;
-  <a href="#-usage">Usage</a> &nbsp;&bull;&nbsp;
-  <a href="#-api">API</a> &nbsp;&bull;&nbsp;
-  <a href="#-benchmarks">Benchmarks</a>
-</p>
-
 </div>
 
 ---
 
 ## Overview
-
-<img align="right" width="300" src="https://raw.githubusercontent.com/gist/patevs/b007a0e98fb216438d4cbf559fac4166/raw/88f20c9d749d756be63f22b09f3c4ac570bc5101/programming.gif" alt="coding"/>
 
 **Face Recognition System** la nen tang nhan dang khuon mat da mo hinh duoc thiet ke cho cac ung dung doanh nghiep.
 
@@ -302,34 +289,6 @@ builder.save('data/embeddings.pkl')
 
 ---
 
-## Benchmarks
-
-<div align="center">
-
-### Performance Metrics
-
-_Evaluated on CelebA Dataset (500 identities, 10 images/identity)_
-
-</div>
-
-| Metric        |                                    ArcFace                                    |                                 FaceNet                                 |                                   LBPH                                   |
-| :------------ | :---------------------------------------------------------------------------: | :---------------------------------------------------------------------: | :----------------------------------------------------------------------: |
-| **Accuracy**  | ![98.2%](https://img.shields.io/badge/-98.2%25-brightgreen?style=flat-square) | ![95.6%](https://img.shields.io/badge/-95.6%25-green?style=flat-square) | ![78.4%](https://img.shields.io/badge/-78.4%25-yellow?style=flat-square) |
-| **Precision** |                                     97.8%                                     |                                  94.9%                                  |                                  76.2%                                   |
-| **Recall**    |                                     98.1%                                     |                                  95.3%                                  |                                  77.8%                                   |
-| **F1-Score**  |                                     97.9%                                     |                                  95.1%                                  |                                  76.9%                                   |
-| **AUC-ROC**   |                                     0.995                                     |                                  0.982                                  |                                  0.856                                   |
-
-### Inference Speed
-
-| Model   |  CPU   |  GPU  | Throughput |
-| :------ | :----: | :---: | :--------: |
-| ArcFace | ~120ms | ~15ms |  66 img/s  |
-| FaceNet | ~100ms | ~12ms |  83 img/s  |
-| LBPH    |  ~2ms  |  N/A  | 500+ img/s |
-
----
-
 ## Configuration
 
 <details>
@@ -408,12 +367,14 @@ Distributed under the **MIT License**. See [LICENSE](LICENSE) for more informati
 
 <div align="center">
 
-| Paper                                                            |  Conference   |
-| :--------------------------------------------------------------- | :-----------: |
-| ArcFace: Additive Angular Margin Loss for Deep Face Recognition  |   CVPR 2019   |
-| FaceNet: A Unified Embedding for Face Recognition and Clustering |   CVPR 2015   |
-| Face Description with Local Binary Patterns                      |  TPAMI 2006   |
-| Joint Face Detection and Alignment Using MTCNN                   | IEEE SPL 2016 |
+|  #  | Paper                                                                                                  | Conference/Journal |
+| :-: | :----------------------------------------------------------------------------------------------------- | :----------------- |
+|  1  | K. Zhang et al., "Joint Face Detection and Alignment Using Multi-task Cascaded Convolutional Networks" | IEEE SPL 2016      |
+|  2  | T. Ahonen et al., "Face Description with Local Binary Patterns: Application to Face Recognition"       | IEEE TPAMI 2006    |
+|  3  | F. Schroff et al., "FaceNet: A Unified Embedding for Face Recognition and Clustering"                  | CVPR 2015          |
+|  4  | J. Deng et al., "ArcFace: Additive Angular Margin Loss for Deep Face Recognition"                      | CVPR 2019          |
+|  5  | A. Paszke et al., "PyTorch: An Imperative Style, High-Performance Deep Learning Library"               | NeurIPS 2019       |
+|  6  | M. Grinberg, "Flask Web Development: Developing Web Applications with Python"                          | O'Reilly 2018      |
 
 </div>
 
