@@ -122,6 +122,7 @@ lbph_model = None
 lbph_label_map = None
 LBPH_DEFAULT_THRESHOLD = 100
 explainability_engine = None
+facenet_explainability_engine = None
 
 
 def get_arcface_engine():
@@ -320,6 +321,22 @@ def get_explainability_engine():
         except Exception as e:
             print(f"Explainability error: {e}")
     return explainability_engine
+
+
+def get_facenet_explainability_engine():
+    global facenet_explainability_engine
+    if facenet_explainability_engine is None:
+        try:
+            engine = get_facenet_engine()
+            if engine and engine.get('model'):
+                from inference.explainability import FaceNetExplainabilityEngine
+                facenet_explainability_engine = FaceNetExplainabilityEngine(
+                    engine['model'], engine['transform'], engine['device']
+                )
+                print("FaceNet Explainability engine loaded")
+        except Exception as e:
+            print(f"FaceNet Explainability error: {e}")
+    return facenet_explainability_engine
 
 
 def extract_face_detection_info(image_path):
@@ -672,94 +689,7 @@ def _get_lbph_top_k(model, face_img, label_map, k=5, max_identities=30):
     return top_k
 
 
-def get_test_data_info():
-    test_dir = app.config["TEST_DATA_DIR"]
-    info = {"aligned": {"classes": 0, "images": 0}, "original": {"classes": 0, "images": 0}}
-    
-    for key, subdir in [("aligned", "images_aligned"), ("original", "original_images")]:
-        path = os.path.join(test_dir, subdir)
-        if os.path.exists(path):
-            classes = [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
-            info[key]["classes"] = len(classes)
-            for cls in classes:
-                cls_path = os.path.join(path, cls)
-                info[key]["images"] += len([f for f in os.listdir(cls_path) if f.lower().endswith(('.jpg', '.png', '.jpeg'))])
-    return info
 
-
-def calculate_evaluation_metrics(y_true, y_pred, labels):
-    """
-    Tính toán các metrics đánh giá và confusion matrix
-    
-    Args:
-        y_true: List các label thật
-        y_pred: List các label dự đoán
-        labels: List tên các classes
-        
-    Returns:
-        Dict chứa accuracy, precision, recall, f1, confusion_matrix
-    """
-    from collections import defaultdict
-    import numpy as np
-    
-    # Convert labels to indices
-    label_to_idx = {label: idx for idx, label in enumerate(labels)}
-    
-    # Build confusion matrix
-    n_classes = len(labels)
-    confusion_matrix = [[0] * n_classes for _ in range(n_classes)]
-    
-    for true_label, pred_label in zip(y_true, y_pred):
-        if true_label in label_to_idx and pred_label in label_to_idx:
-            true_idx = label_to_idx[true_label]
-            pred_idx = label_to_idx[pred_label]
-            confusion_matrix[true_idx][pred_idx] += 1
-    
-    # Calculate overall metrics
-    total = len(y_true)
-    correct = sum(1 for t, p in zip(y_true, y_pred) if t == p)
-    accuracy = (correct / total * 100) if total > 0 else 0
-    
-    # Calculate per-class metrics
-    per_class_metrics = {}
-    precision_list = []
-    recall_list = []
-    f1_list = []
-    
-    for idx, label in enumerate(labels):
-        # True Positives, False Positives, False Negatives
-        tp = confusion_matrix[idx][idx]
-        fp = sum(confusion_matrix[i][idx] for i in range(n_classes)) - tp
-        fn = sum(confusion_matrix[idx][j] for j in range(n_classes)) - tp
-        
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-        recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-        
-        per_class_metrics[label] = {
-            'precision': precision,
-            'recall': recall,
-            'f1': f1,
-            'support': sum(confusion_matrix[idx])
-        }
-        
-        precision_list.append(precision)
-        recall_list.append(recall)
-        f1_list.append(f1)
-    
-    # Macro average
-    macro_precision = sum(precision_list) / len(precision_list) if precision_list else 0
-    macro_recall = sum(recall_list) / len(recall_list) if recall_list else 0
-    macro_f1 = sum(f1_list) / len(f1_list) if f1_list else 0
-    
-    return {
-        'accuracy': accuracy,
-        'precision': macro_precision * 100,
-        'recall': macro_recall * 100,
-        'f1': macro_f1 * 100,
-        'confusion_matrix': confusion_matrix,
-        'per_class_metrics': per_class_metrics
-    }
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -828,22 +758,46 @@ def home():
                     "lbph": fmt(lbph_result)
                 }
                 
+                gradcam_arcface = None
+                gradcam_facenet = None
+                
                 if is_new_upload:
+                    unique_id = session['last_image_name'].split('_')[1].split('.')[0]
+                    ext = os.path.splitext(session['last_image_name'])[1]
+                    
+                    # ArcFace Grad-CAM
                     exp_engine = get_explainability_engine()
                     if exp_engine:
                         try:
                             exp_result = exp_engine.explain(image_to_process)
-                            unique_id = session['last_image_name'].split('_')[1].split('.')[0]
-                            ext = os.path.splitext(session['last_image_name'])[1]
-                            gradcam_filename = f"gradcam_{unique_id}{ext}"
+                            gradcam_filename = f"gradcam_arcface_{unique_id}{ext}"
                             gradcam_path = os.path.join(app.config["GRADCAM_FOLDER"], gradcam_filename)
                             cv2.imwrite(gradcam_path, cv2.cvtColor(exp_result['overlay'], cv2.COLOR_RGB2BGR))
-                            gradcam_image = f"gradcam/{gradcam_filename}"
-                            session['gradcam_image'] = gradcam_image
+                            gradcam_arcface = f"gradcam/{gradcam_filename}"
+                            session['gradcam_arcface'] = gradcam_arcface
                         except Exception as e:
-                            print(f"Grad-CAM error: {e}")
+                            print(f"ArcFace Grad-CAM error: {e}")
+                    
+                    # FaceNet Grad-CAM
+                    facenet_exp_engine = get_facenet_explainability_engine()
+                    if facenet_exp_engine:
+                        try:
+                            facenet_exp_result = facenet_exp_engine.explain(image_to_process)
+                            gradcam_filename = f"gradcam_facenet_{unique_id}{ext}"
+                            gradcam_path = os.path.join(app.config["GRADCAM_FOLDER"], gradcam_filename)
+                            cv2.imwrite(gradcam_path, cv2.cvtColor(facenet_exp_result['overlay'], cv2.COLOR_RGB2BGR))
+                            gradcam_facenet = f"gradcam/{gradcam_filename}"
+                            session['gradcam_facenet'] = gradcam_facenet
+                        except Exception as e:
+                            print(f"FaceNet Grad-CAM error: {e}")
+                    
+                    # Backward compatibility
+                    gradcam_image = gradcam_arcface
+                    session['gradcam_image'] = gradcam_image
                 else:
                     gradcam_image = session.get('gradcam_image')
+                    gradcam_arcface = session.get('gradcam_arcface')
+                    gradcam_facenet = session.get('gradcam_facenet')
                 
                 if is_new_upload and image_to_process.startswith(app.config["TEMP_FOLDER"]):
                     if os.path.exists(image_to_process):
@@ -852,7 +806,10 @@ def home():
                 print(f"Recognition error: {e}")
 
     return render_template("home.html", active="home", result=result, 
-                          image_name=image_name, threshold=threshold_val, gradcam_image=gradcam_image)
+                          image_name=image_name, threshold=threshold_val, 
+                          gradcam_image=gradcam_image if 'gradcam_image' in dir() else None,
+                          gradcam_arcface=gradcam_arcface if 'gradcam_arcface' in dir() else None,
+                          gradcam_facenet=gradcam_facenet if 'gradcam_facenet' in dir() else None)
 
 
 @app.route("/batch", methods=["GET", "POST"])
@@ -923,106 +880,7 @@ def batch():
     return render_template("batch.html", active="batch", results=results)
 
 
-@app.route("/evaluation", methods=["GET", "POST"])
-def evaluation():
-    """Đánh giá: 2 options - Kaggle results hoặc Demo từ test set"""
-    mode = request.args.get("mode", "kaggle")
-    demo_results = None
-    
-    kaggle_metrics = {
-        "arcface": {"accuracy": 92.3, "top5_accuracy": 98.1, "precision": 0.91, "recall": 0.92, "f1": 0.91, "auc": 0.987, "eer": 0.043, "latency_ms": 45.2, "throughput": 22.1},
-        "facenet": {"accuracy": 89.5, "top5_accuracy": 96.8, "precision": 0.88, "recall": 0.89, "f1": 0.88, "auc": 0.972, "eer": 0.058, "latency_ms": 38.5, "throughput": 26.0},
-        "lbph": {"accuracy": 67.2, "top5_accuracy": 82.5, "precision": 0.65, "recall": 0.67, "f1": 0.66, "auc": 0.834, "eer": 0.185, "latency_ms": 5.2, "throughput": 192.3}
-    }
-    
-    if request.method == "POST" and mode == "demo":
-        test_folder = request.form.get("test_folder", "").strip()
-        if not test_folder:
-            test_folder = os.path.join(app.config["TEST_DATA_DIR"], "images_aligned")
-        
-        selected_model = request.form.get("model", "arcface")
-        
-        if os.path.exists(test_folder) and os.path.isdir(test_folder):
-            y_true = []
-            y_pred = []
-            y_pred_top5 = []
-            samples = []
-            confidences = []
-            processing_times = []
-            
-            classes = sorted([d for d in os.listdir(test_folder) if os.path.isdir(os.path.join(test_folder, d))])
-            max_images_per_class = int(request.form.get("max_images", 5))
-            
-            for cls in classes:
-                cls_path = os.path.join(test_folder, cls)
-                images = [f for f in os.listdir(cls_path) if f.lower().endswith(('.jpg', '.png', '.jpeg'))][:max_images_per_class]
-                
-                for img_name in images:
-                    img_path = os.path.join(cls_path, img_name)
-                    
-                    if selected_model == "arcface":
-                        result = recognize_with_arcface(img_path)
-                    elif selected_model == "facenet":
-                        result = recognize_with_facenet(img_path)
-                    else:
-                        result = recognize_with_lbph(img_path)
-                    
-                    predicted = result.get("identity", "Unknown") if result.get("status") == "success" else "Unknown"
-                    confidence = result.get("confidence", 0)
-                    time_ms = result.get("time_ms", 0)
-                    top_k = result.get("top_k", [])
-                    
-                    y_true.append(cls)
-                    y_pred.append(predicted)
-                    confidences.append(confidence)
-                    processing_times.append(time_ms)
-                    
-                    top5_names = [predicted] + [k[0] for k in top_k[1:5]] if top_k else [predicted]
-                    y_pred_top5.append(top5_names)
-                    
-                    is_correct = (cls.lower() == predicted.lower())
-                    samples.append({
-                        "image": img_name,
-                        "true_label": cls,
-                        "predicted": predicted,
-                        "confidence": confidence,
-                        "time_ms": time_ms,
-                        "correct": is_correct
-                    })
-            
-            if y_true and y_pred:
-                metrics = calculate_evaluation_metrics(y_true, y_pred, classes)
-                
-                top5_correct = sum(1 for t, preds in zip(y_true, y_pred_top5) if any(t.lower() == p.lower() for p in preds))
-                top5_accuracy = (top5_correct / len(y_true) * 100) if y_true else 0
-                
-                avg_confidence = sum(confidences) / len(confidences) if confidences else 0
-                avg_time = sum(processing_times) / len(processing_times) if processing_times else 0
-                total_time = sum(processing_times)
-                
-                demo_results = {
-                    "accuracy": metrics["accuracy"],
-                    "top5_accuracy": top5_accuracy,
-                    "precision": metrics["precision"],
-                    "recall": metrics["recall"],
-                    "f1": metrics["f1"],
-                    "avg_confidence": avg_confidence * 100,
-                    "avg_time_ms": avg_time,
-                    "total_time_ms": total_time,
-                    "confusion_matrix": metrics["confusion_matrix"],
-                    "per_class_metrics": metrics["per_class_metrics"],
-                    "classes": classes,
-                    "samples": samples,
-                    "total": len(y_true),
-                    "correct": sum(1 for t, p in zip(y_true, y_pred) if t == p),
-                    "wrong": sum(1 for t, p in zip(y_true, y_pred) if t != p),
-                    "model": selected_model
-                }
-        else:
-            demo_results = {"error": f"Thư mục không tồn tại: {test_folder}"}
-    
-    info = get_test_data_info()
-    return render_template("evaluation.html", active="evaluation", metrics=kaggle_metrics, info=info, mode=mode, demo_results=demo_results)
+
 
 
 # ===== REALTIME FACE RECOGNITION =====

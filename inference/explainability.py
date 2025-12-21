@@ -392,11 +392,134 @@ class ExplainabilityEngine:
         print(f"Saved: {output_path}")
 
 
+class FaceNetExplainabilityEngine:
+    """
+    Engine để generate Grad-CAM explanations cho FaceNet model (InceptionResNetV1)
+    """
+    
+    def __init__(self, model: nn.Module, transform, device: str = 'cpu'):
+        self.model = model
+        self.transform = transform
+        self.device = device
+        
+        # FaceNet dùng InceptionResNetV1, target layer cuối là block8
+        target_layer = self._find_target_layer(model)
+        self.gradcam = GradCAM(model, target_layer)
+        
+        self.face_detector = None
+        try:
+            from preprocessing.face_detector import FaceDetector
+            self.face_detector = FaceDetector(
+                backend='mtcnn',
+                device=device,
+                confidence_threshold=0.9,
+                select_largest=True
+            )
+            print("[FaceNet Explainability] Face detector initialized")
+        except Exception as e:
+            print(f"[FaceNet Explainability] Cannot init face detector: {e}")
+    
+    def _find_target_layer(self, model: nn.Module) -> nn.Module:
+        """Tìm target layer cho FaceNet (InceptionResNetV1)
+        
+        Hook vào block8.conv2d (Conv2d layer cuối) vì:
+        - Là Conv2d layer cụ thể, gradients flow đúng
+        - Output 1792 channels với spatial size 3x3
+        """
+        inner_model = model.model if hasattr(model, 'model') else model
+        
+        # block8.conv2d là conv layer cuối trước average pooling
+        if hasattr(inner_model, 'block8') and hasattr(inner_model.block8, 'conv2d'):
+            return inner_model.block8.conv2d
+        # Fallback: block8 module
+        elif hasattr(inner_model, 'block8'):
+            return inner_model.block8
+        # Fallback: tìm conv layer cuối  
+        else:
+            last_conv = None
+            for name, module in model.named_modules():
+                if isinstance(module, nn.Conv2d):
+                    last_conv = module
+            return last_conv
+    
+    def explain(
+        self,
+        image_input: Union[str, Image.Image],
+        target_embedding: torch.Tensor = None
+    ) -> dict:
+        """Generate CAM explanation cho FaceNet
+        
+        FaceNet sử dụng L2 normalize nên gradients rất nhỏ.
+        Thay vào đó, dùng Activation-based CAM: lấy mean của feature activations.
+        """
+        if isinstance(image_input, str):
+            original = cv2.imread(image_input)
+            if original is None:
+                return {'error': 'Cannot read image'}
+        else:
+            original = cv2.cvtColor(np.array(image_input), cv2.COLOR_RGB2BGR)
+        
+        target_size = (160, 160)
+        
+        aligned_face = None
+        if self.face_detector is not None:
+            cropped = self.face_detector.crop_face(original, margin=0.05, target_size=target_size)
+            if cropped is not None:
+                aligned_face = cropped
+        
+        if aligned_face is None:
+            aligned_face = cv2.resize(original, target_size)
+        
+        aligned_rgb = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
+        pil_image = Image.fromarray(aligned_rgb)
+        
+        input_tensor = self.transform(pil_image).unsqueeze(0).to(self.device)
+        
+        # Forward pass để capture activations (hooks cần context bình thường)
+        self.model.eval()
+        _ = self.model(input_tensor)
+        
+        # Sử dụng activations trực tiếp (không cần gradients)
+        if self.gradcam.activations is not None:
+            activations = self.gradcam.activations  # [1, C, H, W]
+            # Dùng absolute value để handle activations âm
+            abs_act = torch.abs(activations)
+            # Sum các channels (activation intensity)
+            cam = abs_act.sum(dim=1, keepdim=True)  # [1, 1, H, W]
+            # Upsample
+            cam = F.interpolate(
+                cam,
+                size=target_size,
+                mode='bilinear',
+                align_corners=False
+            )
+            cam = cam.squeeze().cpu().numpy()
+            # Normalize
+            if cam.max() > cam.min():
+                cam = (cam - cam.min()) / (cam.max() - cam.min())
+            else:
+                cam = np.zeros(target_size)
+        else:
+            cam = np.zeros(target_size)
+        
+        heatmap = generate_heatmap(cam)
+        heatmap_resized = cv2.resize(heatmap, target_size)
+        
+        overlay = overlay_heatmap(aligned_face, heatmap_resized, alpha=0.5)
+        
+        return {
+            'cam': cam,
+            'heatmap': cv2.cvtColor(heatmap_resized, cv2.COLOR_BGR2RGB),
+            'overlay': cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB),
+            'original': cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
+        }
+
+
 if __name__ == "__main__":
     print("="*60)
     print("EXPLAINABILITY MODULE TEST")
     print("="*60)
     
     print("\nModule loaded successfully!")
-    print("Available classes: GradCAM, ExplainabilityEngine")
+    print("Available classes: GradCAM, ExplainabilityEngine, FaceNetExplainabilityEngine")
     print("Available functions: generate_heatmap, overlay_heatmap, explain_prediction")

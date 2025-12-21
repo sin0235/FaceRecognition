@@ -148,10 +148,22 @@
     const imageInput = document.getElementById('imageInput');
     const form = document.getElementById('recognitionForm');
 
-    if (uploadZone) {
-      // Không dùng uploadZone.click để tránh conflict với label
-      // Label đã có for="imageInput" nên tự động trigger input
+    function showLoading(message = 'Đang xử lý') {
+      const loadingOverlay = document.getElementById('loadingOverlay');
+      const loadingText = document.getElementById('loadingText');
+      if (loadingOverlay) {
+        loadingOverlay.style.display = 'flex';
+        if (loadingText) loadingText.textContent = message;
+      }
+      const submitBtn = document.getElementById('submitBtn');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.6';
+        submitBtn.style.cursor = 'not-allowed';
+      }
+    }
 
+    if (uploadZone) {
       uploadZone.addEventListener('dragover', (e) => {
         e.preventDefault();
         uploadZone.classList.add('drag-over');
@@ -167,6 +179,7 @@
         const files = e.dataTransfer.files;
         if (files.length > 0 && files[0].type.startsWith('image/')) {
           imageInput.files = files;
+          showLoading('Đang upload ảnh');
           form.submit();
         }
       });
@@ -174,12 +187,14 @@
 
     function handleImageSelect(input) {
       if (input.files && input.files[0]) {
+        showLoading('Đang upload ảnh');
         form.submit();
       }
     }
 
     function handleImageChange(input) {
       if (input.files && input.files[0]) {
+        showLoading('Đang upload ảnh');
         form.submit();
       }
     }
@@ -194,17 +209,7 @@
         return;
       }
 
-      const loadingOverlay = document.getElementById('loadingOverlay');
-      if (loadingOverlay) {
-        loadingOverlay.style.display = 'flex';
-      }
-
-      const submitBtn = document.getElementById('submitBtn');
-      if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.style.opacity = '0.6';
-        submitBtn.style.cursor = 'not-allowed';
-      }
+      showLoading('Đang xử lý nhận dạng');
     });
   </script>
 
@@ -594,7 +599,7 @@
   <div
     style="
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr 1fr 1fr;
       gap: 20px;
       margin-top: 24px;
     "
@@ -607,16 +612,70 @@
     </div>
 
     <div class="result-box">
-      <div style="font-weight: 600; margin-bottom: 12px; font-size: 14px">
+      <div
+        style="
+          font-weight: 600;
+          margin-bottom: 12px;
+          font-size: 14px;
+          color: #2563eb;
+        "
+      >
         Grad-CAM (ArcFace)
       </div>
-      {% if gradcam_image %}
+      {% if gradcam_arcface %}
+      <img
+        src="{{ url_for('static', filename=gradcam_arcface) }}"
+        style="
+          width: 100%;
+          max-width: 160px;
+          border-radius: 8px;
+          border: 2px solid #2563eb;
+        "
+      />
+      <p style="font-size: 11px; color: #6b7280; margin-top: 8px">
+        Vùng đỏ = vùng model tập trung
+      </p>
+      {% elif gradcam_image %}
       <img
         src="{{ url_for('static', filename=gradcam_image) }}"
-        style="width: 100%; max-width: 200px; border-radius: 8px"
+        style="
+          width: 100%;
+          max-width: 160px;
+          border-radius: 8px;
+          border: 2px solid #2563eb;
+        "
       />
-      <p style="font-size: 12px; color: #6b7280; margin-top: 8px">
-        Vùng màu đỏ = model tập trung khi nhận dạng
+      <p style="font-size: 11px; color: #6b7280; margin-top: 8px">
+        Vùng đỏ = vùng model tập trung
+      </p>
+      {% else %}
+      <p style="color: #6b7280; font-size: 13px">Không thể tạo Grad-CAM</p>
+      {% endif %}
+    </div>
+
+    <div class="result-box">
+      <div
+        style="
+          font-weight: 600;
+          margin-bottom: 12px;
+          font-size: 14px;
+          color: #7c3aed;
+        "
+      >
+        Grad-CAM (FaceNet)
+      </div>
+      {% if gradcam_facenet %}
+      <img
+        src="{{ url_for('static', filename=gradcam_facenet) }}"
+        style="
+          width: 100%;
+          max-width: 160px;
+          border-radius: 8px;
+          border: 2px solid #7c3aed;
+        "
+      />
+      <p style="font-size: 11px; color: #6b7280; margin-top: 8px">
+        Vùng đỏ = vùng model tập trung
       </p>
       {% else %}
       <p style="color: #6b7280; font-size: 13px">Không thể tạo Grad-CAM</p>
