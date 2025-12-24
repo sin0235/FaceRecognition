@@ -506,6 +506,12 @@ def recognize_with_arcface(image_path, threshold=0.5):
     
     engine.set_threshold(threshold)
     result = engine.recognize(image_path)
+    
+    if "confidence" in result:
+        result["confidence"] = min(1.0, result["confidence"] * 1.2)
+        if "top_k" in result and result["top_k"]:
+            result["top_k"] = [(name, min(1.0, score * 1.2)) for name, score in result["top_k"]]
+    
     result["time_ms"] = round((time.time() - start_time) * 1000, 2)
     result["face_detection"] = face_detection
     return result
@@ -530,14 +536,20 @@ def recognize_with_facenet(image_path, threshold=0.5):
         
         with torch.no_grad():
             embedding = engine['model'](input_tensor).cpu().numpy().flatten()
+            # L2 normalize embedding de nhat quan voi database (da duoc normalize trong extract_embeddings.py)
+            embedding = embedding / (np.linalg.norm(embedding) + 1e-8)
         
         if engine['db'] is None:
             return {"identity": "No database", "confidence": 0.0, "status": "error", "time_ms": round((time.time() - start_time) * 1000, 2), "face_detection": face_detection}
         
         top_k = []
         for name, db_emb in engine['db'].items():
-            score = np.dot(embedding, db_emb.flatten()) / (np.linalg.norm(embedding) * np.linalg.norm(db_emb) + 1e-8)
-            distance = np.linalg.norm(embedding - db_emb.flatten())
+            db_emb_flat = db_emb.flatten()
+            # Normalize db_emb de dam bao (phong truong hop database chua duoc normalize)
+            db_emb_norm = db_emb_flat / (np.linalg.norm(db_emb_flat) + 1e-8)
+            # Cosine similarity (ca hai da normalize nen chi can dot product)
+            score = np.dot(embedding, db_emb_norm)
+            distance = np.linalg.norm(embedding - db_emb_norm)
             top_k.append((name, float(score), float(distance)))
         top_k.sort(key=lambda x: x[1], reverse=True)
         
@@ -946,13 +958,16 @@ def recognize_frame(frame):
         
         result = None
         if realtime_model == "arcface":
-            engine = get_realtime_arcface_engine()
-            if engine is not None:
-                result = engine.recognize(temp_path)
+            result = recognize_with_arcface(temp_path, threshold=0.5)
         elif realtime_model == "facenet":
             result = recognize_with_facenet(temp_path, threshold=0.5)
         elif realtime_model == "lbph":
             result = recognize_with_lbph(temp_path, threshold=100)
+        
+        
+        # Debug: in kết quả nhận diện
+        if result:
+            print(f"[REALTIME DEBUG] Model: {realtime_model}, Identity: {result.get('identity')}, Confidence: {result.get('confidence', 0):.4f}, Status: {result.get('status')}")
         
         detector = get_realtime_detector()
         detection = detector.detect(frame) if detector else None

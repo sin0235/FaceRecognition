@@ -21,7 +21,7 @@ training:
   num_workers: 4
 
   warmup:
-    enabled: false # Tat warmup khi resume
+    enabled: true # Tat warmup khi resume
     epochs: 5
     start_lr: 0.00001
 

@@ -28,9 +28,19 @@ except ImportError:
     HAS_SKIMAGE = False
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(ROOT_DIR)
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
-from preprocessing.face_detector import FaceDetector
+CWD = os.getcwd()
+if CWD not in sys.path:
+    sys.path.insert(0, CWD)
+
+try:
+    from preprocessing.face_detector import FaceDetector
+    HAS_FACE_DETECTOR = True
+except ImportError:
+    HAS_FACE_DETECTOR = False
+    print("[WARN] Could not import FaceDetector. Face detection will be disabled.")
 
 ARCFACE_TEMPLATE = np.array([
     [38.2946, 51.6963],
@@ -161,6 +171,10 @@ class FacePreprocessor:
         self._init_detector()
     
     def _init_detector(self):
+        if not HAS_FACE_DETECTOR:
+            print("[WARN] FaceDetector not available, skipping face detection")
+            self.detector = None
+            return
         try:
             self.detector = FaceDetector(
                 backend='mtcnn',
@@ -253,6 +267,10 @@ class FaceNetPreprocessor:
         self._init_detector()
     
     def _init_detector(self):
+        if not HAS_FACE_DETECTOR:
+            print("[WARN] FaceDetector not available, skipping face detection")
+            self.detector = None
+            return
         try:
             self.detector = FaceDetector(
                 backend='mtcnn',
