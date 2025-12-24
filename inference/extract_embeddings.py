@@ -35,11 +35,37 @@ CWD = os.getcwd()
 if CWD not in sys.path:
     sys.path.insert(0, CWD)
 
+HAS_FACE_DETECTOR = False
+FaceDetector = None
+
 try:
     from preprocessing.face_detector import FaceDetector
     HAS_FACE_DETECTOR = True
+    print("[OK] FaceDetector imported from preprocessing.face_detector")
 except ImportError:
-    HAS_FACE_DETECTOR = False
+    pass
+
+if not HAS_FACE_DETECTOR:
+    try:
+        import importlib.util
+        face_detector_paths = [
+            os.path.join(ROOT_DIR, "preprocessing", "face_detector.py"),
+            os.path.join(CWD, "preprocessing", "face_detector.py"),
+            "/kaggle/working/FaceRecognition/preprocessing/face_detector.py",
+        ]
+        for fd_path in face_detector_paths:
+            if os.path.exists(fd_path):
+                spec = importlib.util.spec_from_file_location("face_detector", fd_path)
+                face_detector_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(face_detector_module)
+                FaceDetector = face_detector_module.FaceDetector
+                HAS_FACE_DETECTOR = True
+                print(f"[OK] FaceDetector imported from {fd_path}")
+                break
+    except Exception as e:
+        print(f"[WARN] Failed to import FaceDetector via importlib: {e}")
+
+if not HAS_FACE_DETECTOR:
     print("[WARN] Could not import FaceDetector. Face detection will be disabled.")
 
 ARCFACE_TEMPLATE = np.array([
