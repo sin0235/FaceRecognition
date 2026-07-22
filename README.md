@@ -1,7 +1,7 @@
 <div align="center">
 
 <!-- Header Banner -->
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=180&section=header&text=Face%20Recognition%20System&fontSize=42&fontColor=fff&animation=twinkling&fontAlignY=32&desc=Project%20Digital%20Image%20Processing&descAlignY=52&descSize=18" width="100%"/>
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=180&section=header&text=Face%20Recognition%20System&fontSize=42&fontColor=fff&animation=twinkling&fontAlignY=32&desc=ArcFace%20%E2%80%A2%20FaceNet%20%E2%80%A2%20LBPH%20%E2%80%A2%20Grad-CAM&descAlignY=52&descSize=18" width="100%"/>
 
 <!-- Badges Row 1 -->
 <p>
@@ -385,6 +385,6 @@ Distributed under the **MIT License**. See [LICENSE](LICENSE) for more informati
 <!-- Footer Banner -->
 <img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=120&section=footer" width="100%"/>
 
-_HCMUTE - Digital Image Processing - 2025_
+_Multi-model face recognition and explainable computer vision_
 
 </div>
