@@ -1,3 +1,27 @@
+<div align="center">
+
+<!-- Header Banner -->
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=180&section=header&text=Face%20Recognition%20System&fontSize=42&fontColor=fff&animation=twinkling&fontAlignY=32&desc=ArcFace%20•%20FaceNet%20•%20LBPH%20•%20Grad-CAM&descAlignY=52&descSize=18" width="100%"/>
+
+<!-- Badges Row 1 -->
+<p>
+  <img src="https://img.shields.io/badge/Python-3.8+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python"/>
+  <img src="https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white" alt="PyTorch"/>
+  <img src="https://img.shields.io/badge/Flask-2.0+-000000?style=for-the-badge&logo=flask&logoColor=white" alt="Flask"/>
+  <img src="https://img.shields.io/badge/OpenCV-4.8+-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white" alt="OpenCV"/>
+</p>
+
+<!-- Badges Row 2 -->
+<p>
+  <img src="https://img.shields.io/badge/CUDA-11.x-76B900?style=for-the-badge&logo=nvidia&logoColor=white" alt="CUDA"/>
+  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License"/>
+  <img src="https://img.shields.io/badge/Status-Active-success?style=for-the-badge" alt="Status"/>
+</p>
+
+</div>
+
+---
+
 # Face Recognition System
 
 Hệ thống nghiên cứu nhận dạng khuôn mặt với ba hướng tiếp cận:
