@@ -1,390 +1,208 @@
-<div align="center">
+# Face Recognition System
 
-<!-- Header Banner -->
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=180&section=header&text=Face%20Recognition%20System&fontSize=42&fontColor=fff&animation=twinkling&fontAlignY=32&desc=ArcFace%20%E2%80%A2%20FaceNet%20%E2%80%A2%20LBPH%20%E2%80%A2%20Grad-CAM&descAlignY=52&descSize=18" width="100%"/>
+Hệ thống nghiên cứu nhận dạng khuôn mặt với ba hướng tiếp cận:
 
-<!-- Badges Row 1 -->
-<p>
-  <img src="https://img.shields.io/badge/Python-3.8+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python"/>
-  <img src="https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white" alt="PyTorch"/>
-  <img src="https://img.shields.io/badge/Flask-2.0+-000000?style=for-the-badge&logo=flask&logoColor=white" alt="Flask"/>
-  <img src="https://img.shields.io/badge/OpenCV-4.8+-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white" alt="OpenCV"/>
-</p>
+- **ArcFace**: embedding 512 chiều, nhận dạng bằng cosine similarity.
+- **FaceNet**: embedding 512 chiều, huấn luyện với triplet loss.
+- **LBPH**: mô hình OpenCV truyền thống, dùng khoảng cách LBPH.
 
-<!-- Badges Row 2 -->
-<p>
-  <img src="https://img.shields.io/badge/CUDA-11.x-76B900?style=for-the-badge&logo=nvidia&logoColor=white" alt="CUDA"/>
-  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License"/>
-  <img src="https://img.shields.io/badge/Status-Active-success?style=for-the-badge" alt="Status"/>
-</p>
+Ứng dụng Flask tại `web_app.py` là entry point chính. Giao diện hỗ trợ nhận dạng một ảnh, xử lý theo lô, webcam và tạo dữ liệu nhận dạng từ thư mục ảnh.
 
-</div>
+## Thành phần chính
 
----
-
-## Overview
-
-**Face Recognition System** la nen tang nhan dang khuon mat da mo hinh duoc thiet ke cho cac ung dung doanh nghiep.
-
-He thong tich hop **3 phuong phap** nhan dang tien tien:
-
-- **ArcFace** - Do chinh xac cao nhat
-- **FaceNet** - Can bang giua toc do va chinh xac
-- **LBPH** - Nhe, nhanh, khong can GPU
-
-### Tai sao chon he thong nay?
-
-|       | Feature          | Description                            |
-| :---: | :--------------- | :------------------------------------- |
-| **1** | Multi-Model      | So sanh ket qua tu 3 mo hinh dong thoi |
-| **2** | Production Ready | Kien truc microservices, de scale      |
-| **3** | Explainable AI   | Grad-CAM visualization                 |
-| **4** | Real-time        | Video streaming do tre thap            |
-
-<br clear="right"/>
-
----
-
-## Features
-
-<div align="center">
-
-### Tech Stack
-
-<p>
-  <img src="https://skillicons.dev/icons?i=python,pytorch,flask,opencv,docker,git,github,vscode&theme=dark&perline=8" alt="Tech Stack"/>
-</p>
-
-</div>
-
-### Core Capabilities
-
-```
-                              +------------------+
-                              |   Face Detection |
-                              |  RetinaFace/MTCNN|
-                              +--------+---------+
-                                       |
-         +-----------------------------+-----------------------------+
-         |                             |                             |
-+--------v---------+         +---------v--------+         +----------v-------+
-|     ArcFace      |         |     FaceNet      |         |       LBPH       |
-|  IResNet100      |         | InceptionResNetV1|         |  Local Binary    |
-|  Embedding: 512  |         |  Embedding: 512  |         |  Pattern Hist    |
-|  Best Accuracy   |         |  Balanced        |         |  Lightweight     |
-+--------+---------+         +---------+--------+         +----------+-------+
-         |                             |                             |
-         +-----------------------------+-----------------------------+
-                                       |
-                              +--------v---------+
-                              | Unified Engine   |
-                              | + Grad-CAM       |
-                              +--------+---------+
-                                       |
-         +-----------------------------+-----------------------------+
-         |                             |                             |
-+--------v---------+         +---------v--------+         +----------v-------+
-|  Single Image    |         |  Batch Process   |         |   Real-time      |
-|  Recognition     |         |  Multi-image     |         |   Video Stream   |
-+------------------+         +------------------+         +------------------+
+```text
+face-recognition-system/
+├── web_app.py                         # Ứng dụng Flask chính
+├── app/
+│   └── app.py                         # Demo Streamlit độc lập
+├── configs/
+│   ├── arcface_config.yaml             # Cấu hình huấn luyện ArcFace
+│   ├── arcface_kaggle.yaml             # Cấu hình ArcFace cho Kaggle
+│   ├── facenet_config.yaml             # Cấu hình huấn luyện FaceNet
+│   ├── facenet_kaggle.yaml             # Cấu hình FaceNet cho Kaggle
+│   └── lbph_config.yaml                # Ngưỡng và kích thước đầu vào LBPH
+├── preprocessing/
+│   ├── face_detector.py                # MTCNN, RetinaFace hoặc OpenCV Haar Cascade
+│   └── celeba_preprocessing.py         # Tiền xử lý dữ liệu CelebA
+├── inference/
+│   ├── recognition_engine.py           # Suy luận ArcFace từ embedding database hoặc FAISS
+│   ├── extract_embeddings.py           # Tạo embedding database ArcFace/FaceNet
+│   ├── database_builder.py              # Job nền tạo database qua giao diện Flask
+│   ├── explainability.py                # Grad-CAM cho ArcFace và FaceNet
+│   └── evaluate.py                      # Metric, ROC, confusion matrix, threshold sweep
+├── models/
+│   ├── arcface/                         # Model, dataloader và script huấn luyện ArcFace
+│   ├── facenet/                         # Model, dataloader và script huấn luyện FaceNet
+│   └── lbphmodel/                       # Huấn luyện, suy luận, đánh giá LBPH
+├── scripts/                             # Tiền xử lý, tạo label map, trực quan hóa log
+├── notebooks/                           # Notebook train, đánh giá và phân tích
+├── templates/                           # Template Flask
+├── static/                              # CSS, logo và file giao diện sinh lúc chạy
+├── docs/
+│   └── extract_embeddings.md            # Hướng dẫn chi tiết tạo embedding database
+├── requirements.txt                     # Phụ thuộc cho môi trường cục bộ
+├── requirements-colab.txt               # Phụ thuộc cho Colab/Kaggle
+└── LICENSE                              # MIT License
 ```
 
-### Feature Matrix
+## Cài đặt
 
-| Feature                  | Description                      |                                Status                                 |
-| :----------------------- | :------------------------------- | :-------------------------------------------------------------------: |
-| Single Image Recognition | Upload va nhan dang anh don le   | ![Done](https://img.shields.io/badge/-Done-success?style=flat-square) |
-| Batch Processing         | Xu ly hang loat nhieu anh        | ![Done](https://img.shields.io/badge/-Done-success?style=flat-square) |
-| Real-time Recognition    | Nhan dang tu webcam/video stream | ![Done](https://img.shields.io/badge/-Done-success?style=flat-square) |
-| Multi-Model Comparison   | So sanh ket qua tu nhieu model   | ![Done](https://img.shields.io/badge/-Done-success?style=flat-square) |
-| Grad-CAM Visualization   | Truc quan hoa vung attention     | ![Done](https://img.shields.io/badge/-Done-success?style=flat-square) |
-| Face Detection           | RetinaFace + MTCNN fallback      | ![Done](https://img.shields.io/badge/-Done-success?style=flat-square) |
-| Database Management      | Xay dung va quan ly embedding DB | ![Done](https://img.shields.io/badge/-Done-success?style=flat-square) |
-| REST API                 | API endpoints cho tich hop       | ![Done](https://img.shields.io/badge/-Done-success?style=flat-square) |
-| GPU Acceleration         | CUDA support                     | ![Done](https://img.shields.io/badge/-Done-success?style=flat-square) |
-
----
-
-## Models
-
-<div align="center">
-
-### Model Comparison
-
-</div>
-
-|                |                                           ArcFace                                            |                                           FaceNet                                            |                                        LBPH                                        |
-| :------------- | :------------------------------------------------------------------------------------------: | :------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------: |
-| **Type**       | ![Deep Learning](https://img.shields.io/badge/-Deep%20Learning-blueviolet?style=flat-square) | ![Deep Learning](https://img.shields.io/badge/-Deep%20Learning-blueviolet?style=flat-square) | ![Traditional](https://img.shields.io/badge/-Traditional-orange?style=flat-square) |
-| **Backbone**   |                                          IResNet100                                          |                                      InceptionResNetV1                                       |                                   LBP Histogram                                    |
-| **Embedding**  |                                           512-dim                                            |                                           512-dim                                            |                                        N/A                                         |
-| **Input Size** |                                           112x112                                            |                                           160x160                                            |                                      100x100                                       |
-| **GPU**        |                                         Recommended                                          |                                         Recommended                                          |                                    Not Required                                    |
-| **Speed**      |                                            ~15ms                                             |                                            ~12ms                                             |                                        ~2ms                                        |
-| **Use Case**   |                                        High Security                                         |                                         General Use                                          |                                    Edge Devices                                    |
-
----
-
-## Installation
-
-### Prerequisites
-
-| Requirement                                                                                         | Minimum | Recommended |
-| :-------------------------------------------------------------------------------------------------- | :-----: | :---------: |
-| ![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white) |   3.8   |    3.10+    |
-| ![RAM](https://img.shields.io/badge/RAM-grey?style=flat-square)                                     |   8GB   |    16GB+    |
-| ![CUDA](https://img.shields.io/badge/CUDA-76B900?style=flat-square&logo=nvidia&logoColor=white)     |    -    |    11.x     |
-| ![Storage](https://img.shields.io/badge/Storage-grey?style=flat-square)                             |   2GB   |    5GB+     |
-
-### Quick Start
+Cài môi trường và phụ thuộc từ thư mục gốc dự án:
 
 ```bash
-# 1. Clone repository
-git clone https://github.com/sin0235/FaceRecognition.git
-cd FaceRecognition
-
-# 2. Create virtual environment
 python -m venv .venv
-
-# Windows
-.venv\Scripts\activate
-
-# Linux/macOS
 source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
 
-# 3. Install dependencies
-pip install -r requirements.txt
+`requirements.txt` bao gồm PyTorch, OpenCV, Flask, MTCNN, scikit-learn và các thư viện xử lý ảnh. Với GPU, cài bản `torch` và `torchvision` phù hợp CUDA trước hoặc thay cho bản do `requirements.txt` cài đặt.
 
-# 4. Launch application
+## Tài nguyên không có trong repository
+
+`.gitignore` loại trừ `data/`, checkpoint mô hình và các file embedding. Muốn nhận dạng có kết quả, chuẩn bị các tài nguyên sau:
+
+```text
+models/checkpoints/
+├── arcface/arcface_best.pth
+├── facenet/facenet_best.pth
+└── LBHP/
+    ├── lbph_model.xml
+    └── label_map.npy
+
+data/
+├── arcface_embeddings_db.npy
+├── facenet_embeddings_db.npy
+└── celeb/
+    └── <identity>/
+        └── <image>.jpg
+```
+
+`data/celeb/<identity>/` là cấu trúc đầu vào để tạo database. Mỗi thư mục con tương ứng một danh tính. ArcFace và FaceNet dùng các file `.npy`; LBPH dùng `lbph_model.xml` cùng `label_map.npy`.
+
+## Chạy ứng dụng Flask
+
+```bash
 python web_app.py
 ```
 
-<details>
-<summary><b>Docker Deployment</b></summary>
+Truy cập `http://127.0.0.1:5000`.
+
+Khi chạy, ứng dụng tự tạo các thư mục tạm:
+
+- `static/uploads/`: ảnh đã tải lên.
+- `static/gradcam/`: ảnh Grad-CAM.
+- `static/detection_bbox/`: ảnh có bounding box.
+- Thư mục tạm hệ điều hành: ảnh dùng trong lúc suy luận.
+
+Các mô hình được nạp lười. Thiếu checkpoint hoặc embedding database làm model tương ứng trả lỗi hoặc không có kết quả nhận dạng.
+
+## Chức năng giao diện
+
+| Đường dẫn | Chức năng |
+| --- | --- |
+| `/` | Tải một ảnh, chạy đồng thời ArcFace, FaceNet và LBPH; hiển thị bounding box và Grad-CAM khi khả dụng. |
+| `/batch` | Tải nhiều ảnh và so sánh kết quả từ ba model. |
+| `/realtime` | Nhận dạng webcam. Webcam được mở từ máy chủ chạy Flask. |
+| `/database-builder` | Tạo embedding database ArcFace/FaceNet hoặc train LBPH trong background thread. |
+
+Các endpoint nội bộ dùng bởi giao diện realtime và database builder:
+
+```text
+GET  /video_feed
+GET  /realtime_result
+POST /stop_camera
+POST /set_realtime_model
+POST /database-builder/build
+GET  /database-builder/status/<job_id>
+GET  /database-builder/download/<path:filename>
+```
+
+Đây là endpoint phục vụ giao diện hiện tại, chưa phải REST API có phiên bản hoặc cơ chế xác thực cho môi trường production.
+
+## Tạo embedding database
+
+Tạo database từ cấu trúc `data/celeb/<identity>/<image>`.
+
+### ArcFace
 
 ```bash
-# Build image
-docker build -t face-recognition .
-
-# Run container
-docker run -p 5000:5000 --gpus all face-recognition
+python inference/extract_embeddings.py \
+  --mode db \
+  --model-type arcface \
+  --model-path models/checkpoints/arcface/arcface_best.pth \
+  --data-dir data/celeb \
+  --output-path data/arcface_embeddings_db.npy \
+  --use-face-detection
 ```
 
-</details>
+### FaceNet
 
----
-
-## Usage
-
-### Web Interface
-
-> Access `http://localhost:5000` after launching
-
-| Endpoint    | Function     | Description                             |
-| :---------- | :----------- | :-------------------------------------- |
-| `/`         | **Home**     | Upload anh don, chon model va threshold |
-| `/batch`    | **Batch**    | Upload nhieu anh de nhan dang dong thoi |
-| `/realtime` | **Realtime** | Nhan dang tu webcam                     |
-
-### Project Structure
-
-```
-FaceRecognition/
-│
-├── web_app.py                 # Main Flask Application
-│
-├── configs/                   # Configuration Files
-│   ├── arcface_config.yaml
-│   ├── facenet_config.yaml
-│   └── lbph_config.yaml
-│
-├── inference/                 # Core Recognition Modules
-│   ├── recognition_engine.py      # Unified Recognition Engine
-│   ├── explainability.py          # Grad-CAM Implementation
-│   ├── extract_embeddings.py      # Embedding Extraction
-│   ├── database_builder.py        # Database Builder
-│   └── evaluate.py                # Model Evaluation
-│
-├── models/                    # Model Weights & Checkpoints
-│   ├── arcface/
-│   ├── facenet/
-│   └── lbphmodel/
-│
-├── notebooks/                 # Training & Analysis
-│   ├── *_kaggle.ipynb             # Training notebooks
-│   ├── evaluate_*.ipynb           # Evaluation notebooks
-│   └── analysis_*.ipynb           # Analysis notebooks
-│
-├── preprocessing/             # Data Preprocessing
-├── templates/                 # HTML Templates
-├── static/                    # Static Assets
-└── data/                      # Datasets & Embeddings
+```bash
+python inference/extract_embeddings.py \
+  --mode db \
+  --model-type facenet \
+  --model-path models/checkpoints/facenet/facenet_best.pth \
+  --data-dir data/celeb \
+  --output-path data/facenet_embeddings_db.npy \
+  --use-face-detection
 ```
 
----
+Tham số `--no-face-detection` tắt detect và align trước khi tạo embedding. Hướng dẫn bổ sung có tại [`docs/extract_embeddings.md`](docs/extract_embeddings.md).
 
-## API
+## Huấn luyện
 
-<details open>
-<summary><b>Recognition Engine</b></summary>
+### ArcFace
 
-```python
-from inference.recognition_engine import FaceRecognitionEngine
-
-# Initialize engine
-engine = FaceRecognitionEngine(
-    model_type='arcface',     # 'arcface', 'facenet', or 'lbph'
-    device='cuda'             # 'cuda' or 'cpu'
-)
-
-# Single recognition
-result = engine.recognize(
-    image_path='path/to/image.jpg',
-    threshold=0.5
-)
-
-# Result structure
-{
-    'identity': str,          # Predicted identity
-    'confidence': float,      # Confidence score [0, 1]
-    'distance': float,        # Embedding distance
-    'bbox': [x1, y1, x2, y2], # Face bounding box
-    'top_k': [...]            # Top K predictions
-}
+```bash
+python models/arcface/train_arcface.py \
+  --config configs/arcface_config.yaml \
+  --data_dir data/CelebA_Aligned_Balanced \
+  --checkpoint_dir models/checkpoints/arcface
 ```
 
-</details>
+Script nhận thêm `--pretrained_backbone`, `--resume` và `--reset_optimizer`.
 
-<details>
-<summary><b>Explainability Engine</b></summary>
+### FaceNet
 
-```python
-from inference.explainability import ArcFaceExplainabilityEngine
-
-# Initialize explainer
-explainer = ArcFaceExplainabilityEngine()
-
-# Generate Grad-CAM visualization
-heatmap = explainer.generate_gradcam(
-    image_path='path/to/image.jpg',
-    target_identity='person_name'
-)
+```bash
+python models/facenet/train_facenet.py \
+  --config configs/facenet_config.yaml
 ```
 
-</details>
+Đường dẫn dữ liệu, checkpoint và log mặc định nằm trong `configs/facenet_config.yaml`.
 
-<details>
-<summary><b>Database Builder</b></summary>
+### LBPH
 
-```python
-from inference.database_builder import DatabaseBuilder
-
-# Build embedding database
-builder = DatabaseBuilder(model_type='arcface')
-builder.build_from_folder('path/to/identities/')
-builder.save('data/embeddings.pkl')
+```bash
+python models/lbphmodel/train_lbph_script.py \
+  --data-dir data/celeb \
+  --output-dir models/checkpoints/LBHP \
+  --find-threshold \
+  --val-dir data/celeb_val
 ```
 
-</details>
+Bỏ `--find-threshold` và `--val-dir` khi không có tập validation. LBPH mặc định detect, crop mặt về `100x100` rồi chuyển grayscale. Cấu hình ngưỡng mặc định nằm trong `configs/lbph_config.yaml`.
 
----
+## Tiền xử lý và đánh giá
 
-## Configuration
+- `preprocessing/celeba_preprocessing.py`: chuẩn bị dữ liệu CelebA.
+- `scripts/celeba_balanced_preprocessing.py`: tạo dữ liệu CelebA cân bằng.
+- `scripts/create_lbph_label_map.py`: tạo label map cho LBPH.
+- `inference/evaluate.py`: các hàm tính metric, ROC, confusion matrix và threshold sweep.
+- `notebooks/`: các workflow huấn luyện, đánh giá và phân tích trên Kaggle/Colab.
 
-<details>
-<summary><b>Model Configuration</b></summary>
+Dùng `requirements-colab.txt` trong Colab hoặc Kaggle khi cần `insightface`, `albumentations`, TensorBoard và FAISS GPU.
 
-```yaml
-# configs/arcface_config.yaml
-model:
-  backbone: iresnet100
-  embedding_size: 512
-  pretrained: true
+## Demo Streamlit
 
-inference:
-  threshold: 0.5
-  top_k: 5
+`app/app.py` là demo Streamlit độc lập dùng `RecognitionEngine`. `streamlit` không có trong `requirements.txt`; cài riêng khi cần:
 
-device: cuda
+```bash
+python -m pip install streamlit
+streamlit run app/app.py
 ```
-
-</details>
-
-<details>
-<summary><b>Environment Variables</b></summary>
-
-| Variable               | Default    | Description             |
-| :--------------------- | :--------- | :---------------------- |
-| `FLASK_ENV`            | production | Flask environment       |
-| `CUDA_VISIBLE_DEVICES` | 0          | GPU device ID           |
-| `MODEL_PATH`           | ./models   | Model weights directory |
-| `LOG_LEVEL`            | INFO       | Logging level           |
-
-</details>
-
----
-
-## Troubleshooting
-
-| Issue                                                                               | Solution                                      |
-| :---------------------------------------------------------------------------------- | :-------------------------------------------- |
-| ![Error](https://img.shields.io/badge/-CUDA%20OOM-red?style=flat-square)            | Giam batch size hoac su dung CPU mode         |
-| ![Error](https://img.shields.io/badge/-Model%20Load%20Failed-red?style=flat-square) | Kiem tra duong dan trong config               |
-| ![Error](https://img.shields.io/badge/-No%20Face-red?style=flat-square)             | Dam bao anh co khuon mat ro rang, min 80x80px |
-| ![Error](https://img.shields.io/badge/-Slow%20Inference-red?style=flat-square)      | Su dung GPU hoac giam resolution              |
-
----
-
-## Contributing
-
-<div align="center">
-
-Contributions are welcome!
-
-</div>
-
-```
-1. Fork the repository
-2. Create feature branch (git checkout -b feature/AmazingFeature)
-3. Commit changes (git commit -m 'Add AmazingFeature')
-4. Push to branch (git push origin feature/AmazingFeature)
-5. Open Pull Request
-```
-
----
 
 ## License
 
-<div align="center">
-
-Distributed under the **MIT License**. See [LICENSE](LICENSE) for more information.
-
-</div>
-
----
-
-## References
-
-<div align="center">
-
-|  #  | Paper                                                                                                  | Conference/Journal |
-| :-: | :----------------------------------------------------------------------------------------------------- | :----------------- |
-|  1  | K. Zhang et al., "Joint Face Detection and Alignment Using Multi-task Cascaded Convolutional Networks" | IEEE SPL 2016      |
-|  2  | T. Ahonen et al., "Face Description with Local Binary Patterns: Application to Face Recognition"       | IEEE TPAMI 2006    |
-|  3  | F. Schroff et al., "FaceNet: A Unified Embedding for Face Recognition and Clustering"                  | CVPR 2015          |
-|  4  | J. Deng et al., "ArcFace: Additive Angular Margin Loss for Deep Face Recognition"                      | CVPR 2019          |
-|  5  | A. Paszke et al., "PyTorch: An Imperative Style, High-Performance Deep Learning Library"               | NeurIPS 2019       |
-|  6  | M. Grinberg, "Flask Web Development: Developing Web Applications with Python"                          | O'Reilly 2018      |
-
-</div>
-
----
-
-<div align="center">
-
-<!-- Footer Banner -->
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=120&section=footer" width="100%"/>
-
-_Multi-model face recognition and explainable computer vision_
-
-</div>
+Dự án phát hành theo [MIT License](LICENSE).
