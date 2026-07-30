@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=180&section=header&text=Face%20Recognition%20System&fontSize=42&fontColor=fff&animation=twinkling&fontAlignY=32&desc=ArcFace%20•%20FaceNet%20•%20LBPH%20•%20Grad-CAM&descAlignY=52&descSize=18" width="100%" alt="Face Recognition System banner"/>
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=180&section=header&text=Face%20Recognition%20System&fontSize=42&fontColor=fff&animation=twinkling&fontAlignY=32&desc=ArcFace%20•%20FaceNet%20•%20LBPH%20•%20Grad-CAM&descAlignY=52&descSize=18" width="100%" alt="Banner Face Recognition System"/>
 
 <p>
   <img src="https://img.shields.io/badge/Python-3.x-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.x"/>
@@ -10,7 +10,9 @@
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT License"/>
 </p>
 
-**Research-oriented comparison of ArcFace, FaceNet, and LBPH for face identification with unknown rejection.**
+**So sánh ArcFace, FaceNet và LBPH cho bài toán định danh khuôn mặt có cơ chế từ chối danh tính lạ.**
+
+**Tiếng Việt** | [English](README_EN.md)
 
 </div>
 
@@ -18,57 +20,57 @@
 
 # Face Recognition System
 
-This repository implements an end-to-end face-recognition research system: CelebA preparation, model training, reference-database construction, thresholded identity matching, evaluation utilities, visual analysis, and two interactive demos.
+Repository triển khai hệ thống nghiên cứu nhận dạng khuôn mặt từ đầu đến cuối: chuẩn bị CelebA, huấn luyện mô hình, xây dựng cơ sở dữ liệu tham chiếu, đối sánh danh tính theo ngưỡng, công cụ đánh giá, trực quan hóa và hai ứng dụng demo.
 
-The primary task is **gallery-based face identification**. Given an image or webcam frame, the system selects the largest detected face, produces either a deep embedding or an LBPH prediction, searches enrolled identities, and returns the best identity or `Unknown`. The gallery is closed and finite, while threshold rejection gives the inference flow a limited open-set behavior. It is not a complete open-set recognition benchmark or a production biometric service.
+Bài toán chính là **định danh khuôn mặt dựa trên gallery**. Với ảnh hoặc frame webcam, hệ thống chọn khuôn mặt hợp lệ lớn nhất, tạo deep embedding hoặc dự đoán LBPH, tìm trong tập danh tính đã đăng ký và trả về kết quả phù hợp nhất hoặc `Unknown`. Gallery là tập đóng và hữu hạn; cơ chế từ chối theo ngưỡng tạo ra khả năng open-set giới hạn ở bước suy luận. Đây không phải benchmark open-set hoàn chỉnh hay dịch vụ sinh trắc học sẵn sàng cho production.
 
 > [!IMPORTANT]
-> Model checkpoints, datasets, embedding databases, FAISS indexes, and reproducible benchmark reports are not committed. Cloning the repository alone is insufficient for recognition. See [Required artifacts](#required-artifacts).
+> Checkpoint, dataset, embedding database, FAISS index và báo cáo benchmark có thể tái lập không được commit. Chỉ clone repository chưa đủ để nhận dạng. Xem [Tài nguyên bắt buộc](#tài-nguyên-bắt-buộc).
 
-## Problem definition
+## Định nghĩa bài toán
 
-The repository separates five related tasks:
+Repository tách biệt năm tác vụ liên quan:
 
-- **Face detection** locates a face and returns a bounding box; MTCNN and RetinaFace can also return five landmarks.
-- **Face alignment** warps landmark coordinates to the canonical ArcFace template. When alignment is unavailable, supported paths fall back to a face crop or resized image.
-- **Face embedding** maps a processed face to a normalized 512-dimensional vector with ArcFace or FaceNet.
-- **Face verification** appears in training/evaluation utilities as same-person versus different-person pair classification at a cosine threshold.
-- **Face identification / recognition** compares a query against enrolled identities, retrieves the best match, and applies a model-specific rejection threshold.
+- **Face detection** xác định vị trí khuôn mặt và trả bounding box; MTCNN và RetinaFace còn có thể trả năm landmark.
+- **Face alignment** biến đổi landmark về canonical ArcFace template. Khi không thể align, các luồng có hỗ trợ sẽ fallback sang crop khuôn mặt hoặc resize ảnh.
+- **Face embedding** ánh xạ khuôn mặt đã xử lý thành vector 512 chiều được chuẩn hóa bằng ArcFace hoặc FaceNet.
+- **Face verification** xuất hiện trong công cụ huấn luyện/đánh giá dưới dạng phân loại cặp cùng người và khác người theo cosine threshold.
+- **Face identification / recognition** so sánh query với các danh tính đã đăng ký, lấy kết quả tốt nhất và áp dụng ngưỡng từ chối riêng cho từng mô hình.
 
-Inputs are image files, uploaded image batches, or server-side webcam frames. Outputs include identity, score or distance, top matches where implemented, face-detection metadata, and optional visualization files.
+Đầu vào gồm file ảnh, batch ảnh upload hoặc frame webcam phía máy chủ. Đầu ra gồm identity, score hoặc distance, top matches khi có, metadata face detection và file trực quan hóa tùy chọn.
 
-## Technical highlights
+## Điểm kỹ thuật chính
 
-- Three recognition branches: ResNet50 ArcFace, InceptionResnetV1 FaceNet, and OpenCV LBPH.
-- MTCNN detection with five-point landmarks; optional RetinaFace and Haar Cascade backends in the detector module.
-- Separate preprocessing contracts for 112×112 ArcFace, 160×160 FaceNet, and 100×100 grayscale LBPH.
-- L2-normalized deep embeddings with cosine-similarity matching and threshold-based `Unknown` rejection.
-- One prototype embedding per enrolled identity, built by averaging all valid reference-image embeddings.
-- Optional ArcFace prototype indexing with FAISS `IndexFlatIP`; direct NPY dictionary search remains the Flask default.
-- Pair-based verification checks, identification metrics, ROC/AUC/EER plotting, confusion matrices, and threshold sweeps.
-- Flask workflows for single image, batch, webcam, and background database building, plus a separate minimal Streamlit demo.
+- Ba nhánh nhận dạng: ResNet50 ArcFace, InceptionResnetV1 FaceNet và OpenCV LBPH.
+- MTCNN detection với năm landmark; detector module còn hỗ trợ RetinaFace tùy chọn và Haar Cascade.
+- Ba hợp đồng preprocessing riêng: ArcFace 112×112, FaceNet 160×160 và LBPH grayscale 100×100.
+- Deep embedding được L2-normalize, đối sánh bằng cosine similarity và từ chối `Unknown` theo threshold.
+- Mỗi danh tính có một prototype embedding, được tạo bằng trung bình các embedding hợp lệ của ảnh tham chiếu.
+- FAISS `IndexFlatIP` là tùy chọn cho ArcFace; Flask mặc định vẫn tìm trực tiếp trong NPY dictionary.
+- Có kiểm tra verification theo cặp, metric identification, ROC/AUC/EER, confusion matrix và threshold sweep.
+- Flask hỗ trợ single image, batch, webcam và background database builder; Streamlit là demo tối giản độc lập.
 
-## System architecture
+## Kiến trúc hệ thống
 
 ```mermaid
 flowchart LR
-    A[Image / batch / webcam] --> B{Input mode}
-    B -->|Uploaded image| C[MTCNN: largest face]
-    B -->|Webcam frame| D[Frame capture]
-    D --> R[OpenCV Haar<br/>display bbox]
-    C --> E{Recognition branch}
+    A[Ảnh / batch / webcam] --> B{Chế độ đầu vào}
+    B -->|Ảnh upload| C[MTCNN: khuôn mặt lớn nhất]
+    B -->|Frame webcam| D[Đọc frame]
+    D --> R[OpenCV Haar<br/>vẽ bounding box]
+    C --> E{Nhánh nhận dạng}
     D --> E
 
-    E -->|ArcFace| F[MTCNN + 5-point align or crop<br/>RGB 112×112]
+    E -->|ArcFace| F[MTCNN + align 5 điểm hoặc crop<br/>RGB 112×112]
     E -->|FaceNet| G[MTCNN crop<br/>RGB 160×160]
     E -->|LBPH| H[MTCNN crop<br/>grayscale 100×100]
 
-    F --> I[ResNet50<br/>512-D embedding]
-    G --> J[InceptionResnetV1<br/>512-D embedding]
+    F --> I[ResNet50<br/>embedding 512-D]
+    G --> J[InceptionResnetV1<br/>embedding 512-D]
     H --> K[LBPH predictor]
 
-    I --> L[NPY prototypes<br/>or optional FAISS]
-    J --> M[NPY prototypes]
+    I --> L[NPY prototype<br/>hoặc FAISS tùy chọn]
+    J --> M[NPY prototype]
     K --> N[Label map + LBPH distance]
 
     L --> O[Cosine top-k + threshold]
@@ -76,60 +78,60 @@ flowchart LR
     N --> P[Distance threshold]
     O --> Q[Identity / Unknown]
     P --> Q
-    R --> S[UI result / annotated stream]
+    R --> S[Kết quả UI / stream đã chú thích]
     Q --> S
 ```
 
-The realtime path uses Haar Cascade only to draw display bounding boxes. Each selected recognition branch separately preprocesses the saved frame: ArcFace and FaceNet use their MTCNN-based paths, while LBPH runs its own MTCNN crop before prediction.
+Luồng realtime chỉ dùng Haar Cascade để vẽ bounding box. Mỗi nhánh nhận dạng vẫn tự preprocessing frame đã lưu: ArcFace và FaceNet dùng luồng dựa trên MTCNN; LBPH chạy MTCNN crop riêng trước khi dự đoán.
 
-## Recognition methods
+## Các phương pháp nhận dạng
 
-| Method | Implementation | Input and representation | Training objective | Recognition score | Repository-level strength | Limitation |
+| Phương pháp | Implementation | Đầu vào và representation | Mục tiêu huấn luyện | Score nhận dạng | Điểm mạnh trong repository | Hạn chế |
 | --- | --- | --- | --- | --- | --- | --- |
-| **ArcFace** | ResNet50 backbone, ImageNet initialization when enabled, 512-D projection, ArcMargin classification head | Landmark-aligned or cropped RGB face, 112×112, normalized with mean/std `0.5`; L2-normalized embedding | Cross-entropy over additive angular-margin logits | Cosine similarity; higher is better | Explicit angular-margin training and canonical five-point alignment | Requires a project checkpoint and enrolled embeddings; threshold needs validation-domain calibration |
-| **FaceNet** | `facenet_pytorch.InceptionResnetV1`, VGGFace2 initialization, 512-D output | MTCNN-cropped RGB face, 160×160, normalized with mean/std `0.5`; L2-normalized embedding | Triplet margin loss with random, semi-hard, or batch-hard mining | Cosine similarity in web inference; L2 triplet distances during training | Pretrained embedding backbone and online mining support | Detection path crops rather than applying the ArcFace landmark template |
-| **LBPH** | `cv2.face.LBPHFaceRecognizer` | MTCNN crop with raw-image fallback, grayscale, 100×100; local binary-pattern histograms | Native LBPH fitting over integer labels | LBPH distance; lower is better | Lightweight traditional-CV baseline with no neural checkpoint | Sensitive to capture conditions; distance is not comparable with cosine similarity |
+| **ArcFace** | ResNet50 backbone, ImageNet initialization khi bật, projection 512-D, ArcMargin classification head | Khuôn mặt RGB đã align landmark hoặc crop, 112×112, normalize mean/std `0.5`; embedding L2-normalized | Cross-entropy trên additive angular-margin logits | Cosine similarity; càng cao càng tốt | Angular-margin training và canonical five-point alignment rõ ràng | Cần checkpoint đúng định dạng và embedding đã đăng ký; threshold phải hiệu chỉnh theo validation domain |
+| **FaceNet** | `facenet_pytorch.InceptionResnetV1`, VGGFace2 initialization, đầu ra 512-D | MTCNN crop RGB, 160×160, normalize mean/std `0.5`; embedding L2-normalized | Triplet margin loss với random, semi-hard hoặc batch-hard mining | Cosine similarity khi web inference; L2 triplet distance khi huấn luyện | Pretrained embedding backbone và online mining | Luồng detection dùng crop, không áp dụng canonical ArcFace warp |
+| **LBPH** | `cv2.face.LBPHFaceRecognizer` | MTCNN crop với raw-image fallback, grayscale, 100×100; local binary-pattern histogram | Native LBPH fitting trên integer label | LBPH distance; càng thấp càng tốt | Baseline traditional CV nhẹ, không cần neural checkpoint | Nhạy với điều kiện chụp; distance không cùng thang đo với cosine similarity |
 
-### ArcFace branch
+### Nhánh ArcFace
 
-`models/arcface/arcface_model.py` builds a ResNet50 feature extractor, a 512-D embedding layer, and an `ArcMarginProduct` head. Labels activate the angular-margin classification path during training; inference omits labels and returns embeddings. `inference/extract_embeddings.py` and `RecognitionEngine` L2-normalize embeddings before matching.
+`models/arcface/arcface_model.py` xây dựng ResNet50 feature extractor, embedding layer 512-D và `ArcMarginProduct` head. Khi có label, mô hình đi qua angular-margin classification path để huấn luyện; khi inference không truyền label và chỉ trả embedding. `inference/extract_embeddings.py` và `RecognitionEngine` L2-normalize embedding trước khi đối sánh.
 
-Default `configs/arcface_config.yaml` settings include 112×112 input, batch size 128, 150 epochs, SGD at `0.01`, step scheduling, warmup, mixed precision, early stopping, and ArcFace scale/margin `64.0/0.1`. `configs/arcface_kaggle.yaml` is a separate 250-epoch cosine-scheduler profile with margin `0.2`; config values are experiment settings, not reported benchmark results.
+Cấu hình mặc định `configs/arcface_config.yaml` dùng ảnh 112×112, batch size 128, 150 epoch, SGD `0.01`, step scheduler, warmup, mixed precision, early stopping và ArcFace scale/margin `64.0/0.1`. `configs/arcface_kaggle.yaml` là profile riêng với 250 epoch, cosine scheduler và margin `0.2`; đây là cấu hình thí nghiệm, không phải kết quả benchmark.
 
-### FaceNet branch
+### Nhánh FaceNet
 
-`models/facenet/facenet_model.py` wraps VGGFace2-pretrained `InceptionResnetV1` and keeps its 512-D embedding unless another projection size is configured. Training uses `TripletMarginLoss`. The default CLI selects online semi-hard mining; random and batch-hard strategies are also available.
+`models/facenet/facenet_model.py` bọc `InceptionResnetV1` pretrained trên VGGFace2 và giữ embedding 512-D, trừ khi config yêu cầu projection khác. Huấn luyện dùng `TripletMarginLoss`. CLI mặc định chọn online semi-hard mining; random và batch-hard cũng được hỗ trợ.
 
-Default `configs/facenet_config.yaml` settings include 160×160 input, batch size 32, 30 epochs, Adam at `3e-4`, StepLR, triplet margin `0.5`, and four images per identity for online mining. The dataloader checks that train and validation identity folders do not overlap.
+Cấu hình mặc định `configs/facenet_config.yaml` dùng ảnh 160×160, batch size 32, 30 epoch, Adam `3e-4`, StepLR, triplet margin `0.5` và bốn ảnh mỗi identity cho online mining. Dataloader kiểm tra train và validation không trùng identity.
 
-### LBPH branch
+### Nhánh LBPH
 
-`models/lbphmodel/train_lbph_script.py` assigns stable integer labels from sorted identity folders, detects/crops faces by default, converts them to 100×100 grayscale images, and trains OpenCV LBPH with radius `1`, eight neighbors, and an `8×8` grid by default. It saves `lbph_model.xml` and `label_map.npy`.
+`models/lbphmodel/train_lbph_script.py` gán integer label ổn định từ các thư mục identity đã sort, mặc định detect/crop khuôn mặt, chuyển ảnh thành grayscale 100×100 và huấn luyện OpenCV LBPH với radius `1`, tám neighbors và grid `8×8`. Script lưu `lbph_model.xml` và `label_map.npy`.
 
-Inference accepts a prediction when LBPH distance is at or below the configured threshold (`100` in `configs/lbph_config.yaml`). The web UI also derives a display-only normalized confidence from distance. That value is not a calibrated probability and must not be compared directly with ArcFace or FaceNet cosine scores. The batch page currently chooses a `best_model` from these heterogeneous display scores; treat that label as a UI heuristic, not a valid cross-model benchmark.
+Inference chấp nhận dự đoán khi LBPH distance nhỏ hơn hoặc bằng threshold (`100` trong `configs/lbph_config.yaml`). Web UI còn chuyển distance thành confidence chuẩn hóa chỉ để hiển thị. Giá trị này không phải probability đã hiệu chỉnh và không được so sánh trực tiếp với cosine score của ArcFace hoặc FaceNet. Batch page hiện chọn `best_model` từ các display score khác thang đo; chỉ xem nhãn này là UI heuristic, không phải benchmark giữa mô hình.
 
-## Face detection, alignment, and preprocessing
+## Face detection, alignment và preprocessing
 
-`preprocessing/face_detector.py` supports three backends:
+`preprocessing/face_detector.py` hỗ trợ ba backend:
 
-| Backend | Status | Landmarks | Selection behavior |
+| Backend | Trạng thái | Landmark | Cách chọn khuôn mặt |
 | --- | --- | --- | --- |
-| MTCNN from `facenet-pytorch` | Default for preprocessing, uploaded-image inference, and database creation | Five points | Filters at confidence `0.9`, minimum face size 20 px, then selects largest valid face |
-| RetinaFace | Optional; falls back to MTCNN when import fails | Five points | Applies configured confidence/minimum-size filters and largest-face selection |
-| OpenCV Haar Cascade | Available without landmarks; used for realtime display detection | None | Selects largest detected face |
+| MTCNN từ `facenet-pytorch` | Mặc định cho preprocessing, inference ảnh upload và tạo database | Năm điểm | Lọc confidence `0.9`, kích thước tối thiểu 20 px, sau đó chọn khuôn mặt hợp lệ lớn nhất |
+| RetinaFace | Tùy chọn; fallback sang MTCNN nếu import thất bại | Năm điểm | Áp dụng confidence/minimum-size đã cấu hình và chọn khuôn mặt lớn nhất |
+| OpenCV Haar Cascade | Có sẵn, không có landmark; dùng để vẽ detection realtime | Không | Chọn khuôn mặt lớn nhất |
 
-Important branch differences:
+Khác biệt quan trọng giữa các nhánh:
 
-- **ArcFace:** estimates a similarity transform from five landmarks to the canonical 112×112 template. Missing `scikit-image`, landmarks, or successful alignment triggers crop-based fallback in supported inference paths.
-- **FaceNet:** uses MTCNN detection and a margin crop resized to 160×160. It does not apply the ArcFace canonical warp in its main inference path.
-- **LBPH:** uses MTCNN crop with margin `0.2`, resizes to 100×100, then converts BGR to grayscale. Failed detection falls back to resizing the source image.
-- **Multi-face images:** current high-level recognition flows use one face, normally the largest accepted detection. They do not return identities for every face in an image.
+- **ArcFace:** ước lượng similarity transform từ năm landmark sang canonical template 112×112. Thiếu `scikit-image`, landmark hoặc alignment thành công sẽ kích hoạt crop fallback trong các luồng inference có hỗ trợ.
+- **FaceNet:** dùng MTCNN detection và margin crop về 160×160. Luồng inference chính không dùng canonical ArcFace warp.
+- **LBPH:** dùng MTCNN crop với margin `0.2`, resize về 100×100 rồi chuyển BGR sang grayscale. Detection thất bại sẽ fallback sang resize ảnh nguồn.
+- **Ảnh nhiều khuôn mặt:** các luồng nhận dạng cấp cao hiện chỉ xử lý một khuôn mặt, thường là detection hợp lệ lớn nhất. Hệ thống không trả identity cho mọi khuôn mặt trong ảnh.
 
-## Dataset and data preparation
+## Dataset và chuẩn bị dữ liệu
 
-### Dataset source
+### Nguồn dữ liệu
 
-CelebA is the repository's primary data workflow. Raw images and generated datasets are not included. The main preprocessor expects:
+CelebA là workflow dữ liệu chính của repository. Ảnh gốc và dataset đã sinh không được commit. Preprocessor chính yêu cầu:
 
 ```text
 data/
@@ -138,25 +140,25 @@ data/
 └── meta_origin/
     ├── identity_CelebA.txt
     ├── list_landmarks_align_celeba.csv
-    ├── list_attr_celeba.csv              # optional
-    └── list_bbox_celeba.csv              # optional
+    ├── list_attr_celeba.csv              # tùy chọn
+    └── list_bbox_celeba.csv              # tùy chọn
 ```
 
-`identity_CelebA.txt` supplies identity labels. Five-point landmark metadata enables canonical alignment. Attributes and bounding boxes are loaded when present but are not required for label generation.
+`identity_CelebA.txt` cung cấp label danh tính. Metadata năm landmark cho phép canonical alignment. Attribute và bounding box được load khi có nhưng không bắt buộc để sinh label.
 
-### Preprocessing workflow
+### Quy trình preprocessing
 
 ```text
-CelebA images + identity/landmark metadata
-    → remove identities below the minimum image count
-    → group images by identity
-    → align originals to 112×112
-    → augment underrepresented identities
-    → split into train / validation / test
-    → write folder trees and metadata CSV files
+Ảnh CelebA + metadata identity/landmark
+    → loại identity dưới số ảnh tối thiểu
+    → nhóm ảnh theo identity
+    → align ảnh gốc về 112×112
+    → augment identity thiếu ảnh
+    → chia train / validation / test
+    → ghi folder tree và metadata CSV
 ```
 
-Run the configurable local pipeline:
+Chạy pipeline local có thể cấu hình:
 
 ```bash
 python preprocessing/celeba_preprocessing.py \
@@ -170,9 +172,9 @@ python preprocessing/celeba_preprocessing.py \
   --seed 42
 ```
 
-The script supports `by_image` and `by_identity`; its CLI default is `by_image`. Use split policy intentionally: FaceNet's default config expects non-overlapping identities (`by_id` metadata notation), while classification-oriented experiments may require shared classes across splits.
+Script hỗ trợ `by_image` và `by_identity`; mặc định CLI là `by_image`. Cần chọn split policy có chủ đích: config FaceNet mặc định yêu cầu identity không trùng nhau (`by_id` trong metadata), còn thí nghiệm classification có thể cần các class xuất hiện ở nhiều split.
 
-Generated structure:
+Cấu trúc sinh ra:
 
 ```text
 data/CelebA_Aligned_Balanced/
@@ -187,47 +189,47 @@ data/CelebA_Aligned_Balanced/
     └── dataset_config.json
 ```
 
-The preprocessing code removes identities with fewer than five images by default and augments identities with 5–9 images toward ten images. Offline augmentation includes horizontal flips, small rotations, color changes, and optional noise/blur when `albumentations` is installed. ArcFace and FaceNet dataloaders apply additional training-time augmentation defined in their respective modules.
+Preprocessing mặc định loại identity có dưới năm ảnh và augment identity có 5–9 ảnh lên mục tiêu mười ảnh. Offline augmentation gồm horizontal flip, rotation nhỏ, thay đổi màu và noise/blur tùy chọn khi có `albumentations`. ArcFace và FaceNet dataloader còn áp dụng augmentation khi huấn luyện theo định nghĩa trong module tương ứng.
 
-`configs/arcface_kaggle.yaml` contains descriptive metadata for a prepared balanced dataset with 9,343 classes and approximately 18 images per class. No generated dataset manifest is committed, so those values should be treated as configuration context rather than a repository-verifiable dataset release.
+`configs/arcface_kaggle.yaml` chứa metadata mô tả dataset cân bằng đã chuẩn bị với 9.343 class và khoảng 18 ảnh/class. Repository không commit dataset manifest đã sinh, vì vậy các số này chỉ là ngữ cảnh cấu hình, không phải dataset release có thể xác minh trực tiếp từ Git.
 
-## Embedding database and identity decision
+## Embedding database và quyết định danh tính
 
-The default deep-model enrollment format is a NumPy-saved dictionary:
+Định dạng enrollment mặc định cho deep model là dictionary được lưu bằng NumPy:
 
 ```python
 {
     "identity_name": np.ndarray(shape=(512,), dtype=...),
-    # one normalized prototype per identity
+    # một normalized prototype cho mỗi identity
 }
 ```
 
-For each identity folder, `inference/extract_embeddings.py` extracts all valid image embeddings, averages them, L2-normalizes the mean, and stores one prototype. Query recognition then:
+Với mỗi thư mục identity, `inference/extract_embeddings.py` trích xuất embedding từ mọi ảnh hợp lệ, tính trung bình, L2-normalize vector trung bình và lưu một prototype. Query recognition sau đó:
 
-1. extracts and L2-normalizes a query embedding;
-2. computes cosine similarity against all prototypes;
-3. sorts candidates in descending similarity order;
-4. returns up to five matches;
-5. returns `Unknown` when the best score is below threshold.
+1. trích xuất và L2-normalize query embedding;
+2. tính cosine similarity với mọi prototype;
+3. sort candidate theo similarity giảm dần;
+4. trả tối đa năm kết quả;
+5. trả `Unknown` nếu best score thấp hơn threshold.
 
-`RecognitionEngine` defaults to threshold `0.5`; the Flask single-image and batch ArcFace/FaceNet flows normally use `0.65`, while realtime uses `0.5`. These are implementation defaults, not universally calibrated operating points. ArcFace web output also rescales displayed scores by `1.2` and clips them to `1.0`; treat UI values as display scores, not probabilities.
+`RecognitionEngine` mặc định dùng threshold `0.5`; luồng single-image và batch ArcFace/FaceNet của Flask thường dùng `0.65`, còn realtime dùng `0.5`. Đây là default của implementation, không phải operating point đã hiệu chỉnh cho mọi domain. ArcFace web output còn nhân display score với `1.2` và clip tại `1.0`; cần xem đây là score hiển thị, không phải probability.
 
-### Optional FAISS path
+### Luồng FAISS tùy chọn
 
-The ArcFace full extraction path can compute class prototypes and build a FAISS `IndexFlatIP` over normalized vectors. `RecognitionEngine` can load this index plus prototype/label files and perform top-k inner-product search. Flask currently instantiates ArcFace with `data/arcface_embeddings_db.npy`, so FAISS is an optional programmatic path rather than the default web-app backend.
+Full extraction path của ArcFace có thể tính class prototype và tạo FAISS `IndexFlatIP` trên vector đã normalize. `RecognitionEngine` có thể load index cùng prototype/label file và tìm top-k bằng inner product. Flask hiện khởi tạo ArcFace với `data/arcface_embeddings_db.npy`, nên FAISS chỉ là programmatic path tùy chọn, không phải backend mặc định của web app.
 
-## Training
+## Huấn luyện
 
-Training follows the common sequence:
+Quy trình chung:
 
 ```text
-prepared identity folders / metadata
-    → model-specific DataLoader and augmentation
-    → embedding model and objective
+Folder identity / metadata đã chuẩn bị
+    → DataLoader và augmentation riêng cho mô hình
+    → embedding model và objective
     → optimizer, scheduler, validation, early stopping
     → best/last checkpoint
-    → enrollment embedding extraction
-    → thresholded recognition
+    → trích xuất enrollment embedding
+    → nhận dạng theo threshold
 ```
 
 ### ArcFace
@@ -239,7 +241,7 @@ python models/arcface/train_arcface.py \
   --checkpoint_dir models/checkpoints/arcface
 ```
 
-Optional CLI arguments: `--pretrained_backbone`, `--resume`, and `--reset_optimizer`. The trainer saves `arcface_best.pth`, `arcface_last.pth`, periodic epoch checkpoints, and training history. TensorBoard and embedding visualizations depend on config and installed optional packages.
+CLI tùy chọn: `--pretrained_backbone`, `--resume` và `--reset_optimizer`. Trainer lưu `arcface_best.pth`, `arcface_last.pth`, checkpoint theo epoch và training history. TensorBoard và embedding visualization phụ thuộc config cùng package tùy chọn đã cài.
 
 ### FaceNet
 
@@ -250,7 +252,7 @@ python models/facenet/train_facenet.py \
   --mining semi_hard
 ```
 
-Accepted mining strategies are `random`, `semi_hard`, and `hard`. The trainer saves `facenet_best.pth`, `facenet_last.pth`, and JSON training history. Current CLI has no resume argument.
+Mining strategy hợp lệ: `random`, `semi_hard`, `hard`. Trainer lưu `facenet_best.pth`, `facenet_last.pth` và JSON training history. CLI hiện không có argument resume.
 
 ### LBPH
 
@@ -260,7 +262,7 @@ python models/lbphmodel/train_lbph_script.py \
   --output-dir models/checkpoints/LBHP
 ```
 
-Optional validation threshold search:
+Tìm threshold trên validation tùy chọn:
 
 ```bash
 python models/lbphmodel/train_lbph_script.py \
@@ -270,33 +272,33 @@ python models/lbphmodel/train_lbph_script.py \
   --val-dir data/CelebA_Aligned_Balanced/val
 ```
 
-Threshold search writes analysis beside the model and updates `configs/lbph_config.yaml`. It is therefore a state-changing training operation, not a read-only evaluation command.
+Threshold search ghi analysis cạnh model và cập nhật `configs/lbph_config.yaml`. Đây là thao tác huấn luyện có thay đổi state, không phải command đánh giá read-only.
 
-### Kaggle and Colab
+### Kaggle và Colab
 
-- `requirements-colab.txt` adds `albumentations`, TensorBoard, InsightFace, and GPU FAISS dependencies.
-- `configs/arcface_kaggle.yaml` and `configs/facenet_kaggle.yaml` define Kaggle-oriented profiles.
-- `notebooks/arcface_kaggle.ipynb`, `notebooks/facenet_kaggle.ipynb`, preprocessing notebooks, and model-specific evaluation notebooks provide interactive workflows.
+- `requirements-colab.txt` bổ sung `albumentations`, TensorBoard, InsightFace và GPU FAISS.
+- `configs/arcface_kaggle.yaml` và `configs/facenet_kaggle.yaml` là profile hướng đến Kaggle.
+- `notebooks/arcface_kaggle.ipynb`, `notebooks/facenet_kaggle.ipynb`, notebook preprocessing và các notebook evaluation cung cấp workflow tương tác.
 
-The code falls back to CPU where implemented, but GPU training is the practical target for deep models. Install PyTorch/torchvision builds compatible with the runtime CUDA version instead of assuming a fixed CUDA release.
+Code fallback sang CPU tại các vị trí có hỗ trợ, nhưng GPU là mục tiêu thực tế để huấn luyện deep model. Cần cài PyTorch/torchvision phù hợp với CUDA runtime của máy thay vì mặc định một phiên bản CUDA cố định.
 
-## Required artifacts
+## Tài nguyên bắt buộc
 
-| Artifact | Expected path used by Flask | In Git | How to produce it |
+| Tài nguyên | Path Flask sử dụng | Có trong Git | Cách tạo |
 | --- | --- | --- | --- |
-| Prepared CelebA data | `data/CelebA_Aligned_Balanced/` | No | Run `preprocessing/celeba_preprocessing.py` or a preprocessing notebook |
-| Enrollment images | `data/celeb/<identity>/<image>` for example DB commands | No | Supply a folder per enrolled identity |
-| ArcFace checkpoint | `models/checkpoints/arcface/arcface_best.pth` | No | Train ArcFace or provide a compatible project checkpoint |
-| FaceNet checkpoint | `models/checkpoints/facenet/facenet_best.pth` | No | Train FaceNet or provide a compatible project checkpoint |
-| ArcFace prototype DB | `data/arcface_embeddings_db.npy` | No | Run ArcFace database extraction or use Database Builder |
-| FaceNet prototype DB | `data/facenet_embeddings_db.npy` | No | Run FaceNet database extraction or use Database Builder |
-| LBPH model and labels | `models/checkpoints/LBHP/lbph_model.xml`, `label_map.npy` | No | Run LBPH training or use Database Builder |
-| FAISS index and mapping | Usually under `data/embeddings/` | No | Run optional ArcFace `full` extraction mode with CSV metadata |
-| Evaluation outputs | `results/evaluation/` when generated | No reproducible report tracked | Call evaluation utilities with a defined test protocol |
+| CelebA đã chuẩn bị | `data/CelebA_Aligned_Balanced/` | Không | Chạy `preprocessing/celeba_preprocessing.py` hoặc preprocessing notebook |
+| Ảnh enrollment | `data/celeb/<identity>/<image>` trong command ví dụ | Không | Cung cấp một thư mục cho mỗi identity |
+| ArcFace checkpoint | `models/checkpoints/arcface/arcface_best.pth` | Không | Huấn luyện ArcFace hoặc cung cấp checkpoint tương thích với project |
+| FaceNet checkpoint | `models/checkpoints/facenet/facenet_best.pth` | Không | Huấn luyện FaceNet hoặc cung cấp checkpoint tương thích với project |
+| ArcFace prototype DB | `data/arcface_embeddings_db.npy` | Không | Chạy ArcFace database extraction hoặc dùng Database Builder |
+| FaceNet prototype DB | `data/facenet_embeddings_db.npy` | Không | Chạy FaceNet database extraction hoặc dùng Database Builder |
+| LBPH model và label | `models/checkpoints/LBHP/lbph_model.xml`, `label_map.npy` | Không | Chạy LBPH training hoặc dùng Database Builder |
+| FAISS index và mapping | Thường nằm trong `data/embeddings/` | Không | Chạy ArcFace `full` extraction mode với CSV metadata |
+| Evaluation output | `results/evaluation/` khi được sinh | Không có reproducible report được track | Gọi evaluation utility với protocol xác định |
 
-### Build deep embedding databases
+### Tạo deep embedding database
 
-Enrollment input must use one subdirectory per identity:
+Enrollment input phải có một thư mục con cho mỗi identity:
 
 ```text
 data/celeb/
@@ -331,71 +333,71 @@ python inference/extract_embeddings.py \
   --use-face-detection
 ```
 
-`--no-face-detection` uses source images directly; use it only for data already cropped and normalized to the intended model contract. Additional Windows syntax is documented in [`docs/extract_embeddings.md`](docs/extract_embeddings.md), but logged values in that document are historical examples, not current benchmark evidence.
+`--no-face-detection` dùng trực tiếp ảnh nguồn; chỉ dùng khi dữ liệu đã được crop và chuẩn hóa đúng hợp đồng của mô hình. Cú pháp Windows bổ sung nằm tại [`docs/extract_embeddings.md`](docs/extract_embeddings.md), nhưng giá trị log trong tài liệu đó chỉ là ví dụ lịch sử, không phải benchmark hiện tại.
 
-## Evaluation and results
+## Đánh giá và kết quả
 
-`inference/evaluate.py` provides reusable functions rather than a dataset CLI. Implemented outputs include:
+`inference/evaluate.py` cung cấp reusable function, không phải dataset CLI. Output đã triển khai gồm:
 
-- accuracy, weighted/macro precision, recall, and F1;
-- confidence-threshold sweep with acceptance (`known_ratio`);
-- ROC curve, AUC, and an EER estimate for binary correctness labels;
+- accuracy, weighted/macro precision, recall và F1;
+- confidence-threshold sweep với tỷ lệ chấp nhận (`known_ratio`);
+- ROC curve, AUC và EER estimate cho binary correctness label;
 - confusion matrix;
-- generated Markdown report and plots.
+- Markdown report và plot được sinh tự động.
 
-ArcFace and FaceNet trainers also estimate pair-based verification accuracy by sampling positive/negative pairs and searching cosine thresholds. FaceNet logs triplet constraint accuracy, positive/negative distances, validation loss, and pair verification accuracy. LBPH evaluation utilities report accepted-sample accuracy and coverage at a distance threshold.
+ArcFace và FaceNet trainer còn ước lượng verification accuracy theo cặp bằng cách sample positive/negative pair và tìm cosine threshold. FaceNet log triplet constraint accuracy, positive/negative distance, validation loss và pair verification accuracy. LBPH evaluation utility báo accepted-sample accuracy và coverage tại distance threshold.
 
-For a defensible comparison, keep gallery/query partitions fixed, calibrate each model's threshold on validation data, evaluate on a held-out query set, and report both recognition quality and rejection/coverage. Do not compare LBPH distance or its derived UI confidence directly with deep-model cosine similarity.
+Để so sánh có cơ sở, cần cố định gallery/query partition, hiệu chỉnh threshold riêng cho từng mô hình trên validation data, đánh giá trên held-out query set và báo cả chất lượng nhận dạng lẫn rejection/coverage. Không so sánh trực tiếp LBPH distance hoặc confidence UI suy ra từ distance với cosine similarity của deep model.
 
-**No reproducible benchmark table is published here.** Evaluation code and historical notebook outputs exist, but the repository does not track the required checkpoints, generated dataset manifest, embedding databases, and complete evaluation artifacts needed to independently reproduce a model comparison. Consequently, this README makes no accuracy, AUC, EER, FPS, or state-of-the-art claim.
+**README không công bố bảng benchmark có thể tái lập.** Evaluation code và output notebook lịch sử có tồn tại, nhưng repository không track checkpoint, generated dataset manifest, embedding database và toàn bộ evaluation artifact cần để tái lập độc lập so sánh mô hình. Vì vậy tài liệu không đưa claim về accuracy, AUC, EER, FPS hay state of the art.
 
-## Explainability visualizations
+## Trực quan hóa explainability
 
-`inference/explainability.py` implements:
+`inference/explainability.py` triển khai:
 
-- ArcFace Grad-CAM, targeting `backbone.layer4` by default or the last convolutional layer as fallback;
-- FaceNet activation-based CAM using `block8.conv2d` when available, because the implementation does not use embedding gradients for this branch;
-- heatmap, overlay, and combined image generation.
+- ArcFace Grad-CAM, mặc định target `backbone.layer4`, fallback sang convolutional layer cuối;
+- FaceNet activation-based CAM dùng `block8.conv2d` khi có, vì nhánh này không dùng embedding gradient;
+- sinh heatmap, overlay và ảnh kết hợp.
 
-Flask writes ArcFace and FaceNet overlays under `static/gradcam/` for uploaded single images. These heatmaps indicate spatial activation associated with the embedding path; they do not prove why an identity match is correct and are not a causal explanation of the final threshold decision.
+Flask ghi ArcFace và FaceNet overlay vào `static/gradcam/` cho ảnh đơn được upload. Heatmap biểu diễn vùng kích hoạt trong embedding path; không chứng minh tại sao identity match đúng và không phải causal explanation cho quyết định threshold cuối cùng.
 
-## Applications
+## Ứng dụng
 
-### Flask application
+### Ứng dụng Flask
 
-`web_app.py` is the main application entry point. Models are loaded lazily.
+`web_app.py` là entry point chính. Model được lazy load.
 
-| UI route | Behavior |
+| UI route | Chức năng |
 | --- | --- |
-| `/` | Upload one image, run ArcFace, FaceNet, and LBPH, show scores, detection metadata/bounding boxes, and available ArcFace/FaceNet CAM overlays |
-| `/batch` | Process multiple images with all three methods |
-| `/realtime` | Stream server-side webcam input and select ArcFace, FaceNet, or LBPH |
-| `/database-builder` | Start background jobs to build ArcFace/FaceNet prototype databases or train LBPH; poll status and download generated artifacts |
+| `/` | Upload một ảnh, chạy ArcFace, FaceNet và LBPH; hiển thị score, detection metadata/bounding box và ArcFace/FaceNet CAM overlay khi có |
+| `/batch` | Xử lý nhiều ảnh bằng cả ba phương pháp |
+| `/realtime` | Stream webcam phía server và chọn ArcFace, FaceNet hoặc LBPH |
+| `/database-builder` | Khởi chạy background job để tạo ArcFace/FaceNet prototype database hoặc huấn luyện LBPH; theo dõi status và download artifact |
 
-Internal routes support the UI's video stream, model selection, job status, and downloads. They are not a versioned or authenticated production REST API. The Flask app runs with `debug=True`; deploy only in a controlled development environment.
+Các route nội bộ phục vụ video stream, chọn model, trạng thái job và download của UI. Chúng không phải REST API production có version và authentication. Flask chạy với `debug=True`; chỉ chạy trong môi trường development được kiểm soát.
 
-Run from repository root:
+Chạy từ repository root:
 
 ```bash
 python web_app.py
 ```
 
-Open `http://127.0.0.1:5000`. Webcam capture uses camera index `0` on the machine running Flask, not the browser client's camera device.
+Mở `http://127.0.0.1:5000`. Webcam dùng camera index `0` trên máy chạy Flask, không phải camera của browser client.
 
-### Streamlit demo
+### Demo Streamlit
 
-`app/app.py` is a separate single-image ArcFace demo built on a default `RecognitionEngine()`. That default does not receive a database path, so the current Streamlit entry point cannot return enrolled recognition results without code/configuration changes. Its UI also labels itself as illustrative. `streamlit` is not declared in project requirements.
+`app/app.py` là demo ArcFace single-image độc lập, dùng `RecognitionEngine()` mặc định. Engine này không nhận database path, nên entry point Streamlit hiện tại không thể trả kết quả nhận dạng đã enrollment nếu không đổi code/config. UI cũng ghi rõ kết quả chỉ mang tính minh họa. `streamlit` không có trong requirements của project.
 
-To inspect the current demo:
+Để xem demo hiện tại:
 
 ```bash
 python -m pip install streamlit
 streamlit run app/app.py
 ```
 
-## Installation
+## Cài đặt
 
-### Local environment
+### Môi trường local
 
 ```bash
 git clone git@github.com:sin0235/face-recognition-system.git
@@ -406,71 +408,71 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-`opencv-contrib-python` is required for `cv2.face` and LBPH. `requirements.txt` includes both `opencv-python` and `opencv-contrib-python`; verify that the resulting environment exposes `cv2.face`.
+`opencv-contrib-python` là bắt buộc cho `cv2.face` và LBPH. `requirements.txt` chứa cả `opencv-python` lẫn `opencv-contrib-python`; cần xác minh environment sau khi cài có `cv2.face`.
 
-For CUDA, install PyTorch and torchvision wheels appropriate for the host driver/runtime. CUDA is optional for supported inference paths; code selects CPU when CUDA is unavailable.
+Với CUDA, cài PyTorch và torchvision wheel phù hợp driver/runtime của máy. CUDA không bắt buộc cho các luồng inference có CPU fallback; code chọn CPU khi CUDA không khả dụng.
 
-### Reproduction order
+### Thứ tự tái lập
 
-1. Install local or notebook dependencies.
-2. Obtain CelebA and required metadata outside Git.
-3. Prepare aligned train/validation/test folders with a deliberate split policy.
-4. Train a model or place compatible checkpoints at the expected paths.
-5. Prepare enrollment folders and build ArcFace/FaceNet prototype databases; train LBPH and preserve its label map.
-6. Calibrate model-specific thresholds on validation data.
-7. Run the Flask app or invoke inference programmatically.
-8. Evaluate against a fixed held-out protocol and retain generated reports with the exact config/checkpoint identifiers.
+1. Cài dependency local hoặc notebook.
+2. Tải CelebA và metadata cần thiết ngoài Git.
+3. Chuẩn bị folder train/validation/test đã align với split policy rõ ràng.
+4. Huấn luyện mô hình hoặc đặt checkpoint tương thích vào path yêu cầu.
+5. Chuẩn bị enrollment folder, tạo ArcFace/FaceNet prototype database; huấn luyện LBPH và giữ label map.
+6. Hiệu chỉnh threshold riêng cho từng mô hình trên validation data.
+7. Chạy Flask app hoặc gọi inference bằng code.
+8. Đánh giá trên protocol held-out cố định và lưu report cùng config/checkpoint identifier chính xác.
 
-## Repository structure
+## Cấu trúc repository
 
 ```text
-app/                         Standalone Streamlit demo
-configs/                     ArcFace, FaceNet, LBPH, local, and Kaggle settings
-docs/                        Supplemental embedding-extraction notes
-inference/                   Recognition, enrollment, evaluation, CAM, and DB jobs
-models/arcface/              ResNet50 ArcFace model, dataloaders, and trainer
-models/facenet/              InceptionResnetV1 wrapper, triplet mining, and trainer
-models/lbphmodel/            OpenCV LBPH training, thresholds, and evaluation
-notebooks/                   Preprocessing, training, evaluation, and analysis workflows
-preprocessing/               Multi-backend detector and CelebA preparation pipeline
-scripts/                     Colab-oriented balancing and supporting utilities
-static/                      Flask assets and runtime-generated visualizations
-templates/                   Flask UI templates
-web_app.py                   Main Flask application
-requirements.txt             Local runtime/training dependencies
-requirements-colab.txt       Colab/Kaggle-oriented dependencies
+app/                         Demo Streamlit độc lập
+configs/                     Cấu hình ArcFace, FaceNet, LBPH, local và Kaggle
+docs/                        Tài liệu bổ sung về embedding extraction
+inference/                   Recognition, enrollment, evaluation, CAM và DB job
+models/arcface/              ResNet50 ArcFace model, dataloader và trainer
+models/facenet/              InceptionResnetV1 wrapper, triplet mining và trainer
+models/lbphmodel/            OpenCV LBPH training, threshold và evaluation
+notebooks/                   Workflow preprocessing, training, evaluation và analysis
+preprocessing/               Multi-backend detector và pipeline chuẩn bị CelebA
+scripts/                     Balancing workflow hướng đến Colab và utility hỗ trợ
+static/                      Flask asset và runtime visualization
+templates/                   Flask UI template
+web_app.py                   Ứng dụng Flask chính
+requirements.txt             Dependency cho local
+requirements-colab.txt       Dependency hướng đến Colab/Kaggle
 ```
 
-## Limitations and responsible use
+## Hạn chế và sử dụng có trách nhiệm
 
-- No anti-spoofing or liveness detection is implemented; photos or replay attacks are not addressed.
-- Unknown rejection is threshold-based. Defaults are not a substitute for calibration on target cameras, identities, and operating conditions.
-- Largest-face selection ignores additional faces in group images.
-- Detection and recognition can degrade under pose, blur, occlusion, lighting change, low resolution, and domain shift.
-- CelebA-derived training/evaluation can inherit demographic and collection bias; no fairness audit is stored in the repository.
-- Direct NPY prototype search is linear in enrolled identity count. FAISS support exists, but it is not integrated into the default Flask setup.
-- Web routes lack production authentication, authorization, API versioning, persistent job storage, and hardened deployment settings.
-- Biometric templates and face images are sensitive data. Obtain consent, minimize retention, restrict access, and follow applicable privacy law.
-- Checkpoint compatibility depends on repository model definitions and saved configuration. Arbitrary paper or third-party weights are not drop-in assets.
+- Không có anti-spoofing hoặc liveness detection; hệ thống không xử lý ảnh chụp hay replay attack.
+- Unknown rejection phụ thuộc threshold. Default không thay thế hiệu chỉnh trên camera, identity và điều kiện vận hành mục tiêu.
+- Largest-face selection bỏ qua các khuôn mặt còn lại trong ảnh nhóm.
+- Detection và recognition có thể suy giảm do pose, blur, occlusion, ánh sáng, độ phân giải thấp và domain shift.
+- Training/evaluation dựa trên CelebA có thể kế thừa demographic bias và collection bias; repository không lưu fairness audit.
+- Tìm trực tiếp trên NPY prototype có độ phức tạp tuyến tính theo số identity. FAISS có hỗ trợ nhưng chưa tích hợp vào Flask mặc định.
+- Web route thiếu production authentication, authorization, API versioning, persistent job storage và cấu hình deployment đã harden.
+- Biometric template và ảnh khuôn mặt là dữ liệu nhạy cảm. Cần có consent, giảm thời gian lưu, giới hạn truy cập và tuân thủ luật riêng tư áp dụng.
+- Checkpoint compatibility phụ thuộc model definition và config đã lưu trong repository. Weight từ paper hoặc bên thứ ba không mặc định tương thích.
 
-## Future work
+## Hướng phát triển
 
-- Publish a versioned evaluation protocol with immutable split manifests, checkpoint hashes, threshold calibration, and tracked result artifacts.
-- Normalize reporting across cosine-similarity and LBPH-distance branches without presenting either score as probability.
-- Add multi-face output and benchmark the optional FAISS path against direct prototype search.
-- Add liveness/anti-spoofing, access control, persistent jobs, and production deployment only after defining a biometric threat model.
+- Công bố evaluation protocol có version với immutable split manifest, checkpoint hash, threshold calibration và result artifact được track.
+- Chuẩn hóa cách báo cáo cosine similarity và LBPH distance mà không trình bày chúng như probability.
+- Thêm output nhiều khuôn mặt và benchmark FAISS path so với direct prototype search.
+- Chỉ thêm liveness/anti-spoofing, access control, persistent job và production deployment sau khi xác định biometric threat model.
 
-## References
+## Tài liệu tham khảo
 
 - Deng, J. et al. *ArcFace: Additive Angular Margin Loss for Deep Face Recognition*. CVPR 2019.
 - Schroff, F. et al. *FaceNet: A Unified Embedding for Face Recognition and Clustering*. CVPR 2015.
 - Ahonen, T. et al. *Face Description with Local Binary Patterns: Application to Face Recognition*. IEEE TPAMI 2006.
 - Liu, Z. et al. *Deep Learning Face Attributes in the Wild*. ICCV 2015.
 
-## Contributing
+## Đóng góp
 
-Open an issue before substantial changes. Contributions should include a clear experiment protocol, avoid committing private biometric data or large generated artifacts, and keep documentation claims traceable to code, configuration, or reproducible outputs.
+Mở issue trước khi thực hiện thay đổi lớn. Contribution cần có experiment protocol rõ ràng, không commit dữ liệu sinh trắc học riêng tư hoặc artifact lớn, và giữ mọi claim trong tài liệu truy ngược được về code, config hoặc output có thể tái lập.
 
-## License
+## Giấy phép
 
-Released under the [MIT License](LICENSE). Copyright © 2025 Trần Phúc Toàn.
+Phát hành theo [MIT License](LICENSE). Copyright © 2025 Trần Phúc Toàn.
